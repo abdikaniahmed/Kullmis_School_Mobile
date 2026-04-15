@@ -1,16 +1,57 @@
 # kullmis_school_mobile
 
-A new Flutter project.
+Flutter shell for the Kullmis School Laravel API.
 
-## Getting Started
+## What changed
 
-This project is a starting point for a Flutter application.
+- Laravel `api/login` now issues a Sanctum bearer token for mobile clients.
+- Laravel `api/logout` now revokes the current token.
+- Flutter now has a login screen, token persistence, current-user bootstrap, and a school dashboard shell.
 
-A few resources to get you started if this is your first Flutter project:
+## Backend requirements
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+Run the Laravel app first:
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+```powershell
+php artisan serve
+```
+
+If you use logos or other public files, also run:
+
+```powershell
+php artisan storage:link
+```
+
+## Flutter setup
+
+Fetch packages:
+
+```powershell
+flutter pub get
+```
+
+Run the app and point it to Laravel with `--dart-define`.
+
+Android emulator:
+
+```powershell
+flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8000/api
+```
+
+iOS simulator:
+
+```powershell
+flutter run --dart-define=API_BASE_URL=http://127.0.0.1:8000/api
+```
+
+Real device on the same network:
+
+```powershell
+flutter run --dart-define=API_BASE_URL=http://YOUR-LAN-IP:8000/api
+```
+
+## Notes
+
+- The mobile app authenticates with bearer tokens, not Laravel session cookies.
+- `school/dashboard` is only available for roles allowed by the Laravel API. A successful login without dashboard data usually means the role authenticated but does not have access to that endpoint.
+- `NSAllowsArbitraryLoads` was enabled in iOS only to simplify local development over HTTP. Tighten that before production.
