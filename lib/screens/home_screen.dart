@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../models/auth_session.dart';
 import '../models/dashboard_data.dart';
+import '../services/laravel_api.dart';
+import 'subject_attendance_screen.dart';
 import '../widgets/summary_card.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -9,14 +11,19 @@ class HomeScreen extends StatelessWidget {
     super.key,
     required this.session,
     required this.dashboard,
+    required this.api,
     required this.onRefresh,
     required this.onLogout,
   });
 
   final AuthSession session;
   final DashboardData? dashboard;
+  final LaravelApi api;
   final Future<void> Function() onRefresh;
   final Future<void> Function() onLogout;
+
+  bool get _canTakeSubjectAttendance =>
+      session.roles.any((role) => role.toLowerCase() == 'teacher');
 
   @override
   Widget build(BuildContext context) {
@@ -120,6 +127,45 @@ class HomeScreen extends StatelessWidget {
               children: cards.map((card) => SummaryCard(card: card)).toList(),
             ),
             const SizedBox(height: 20),
+            if (_canTakeSubjectAttendance) ...[
+              Container(
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Teacher tools',
+                      style: theme.textTheme.titleLarge,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Open subject attendance to load your assigned class period and record each student status.',
+                      style: theme.textTheme.bodyMedium,
+                    ),
+                    const SizedBox(height: 16),
+                    FilledButton.icon(
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => SubjectAttendanceScreen(
+                              api: api,
+                              token: session.token,
+                            ),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.fact_check_outlined),
+                      label: const Text('Take Subject Attendance'),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+            ],
             if (dashboard == null)
               Container(
                 padding: const EdgeInsets.all(18),

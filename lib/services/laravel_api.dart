@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 
 import '../models/auth_session.dart';
 import '../models/dashboard_data.dart';
+import '../models/subject_attendance_models.dart';
 
 class LaravelApi {
   static const baseUrl = String.fromEnvironment(
@@ -65,6 +66,70 @@ class LaravelApi {
     _throwIfNeeded(response, payload);
 
     return DashboardData.fromResponse(payload);
+  }
+
+  Future<SubjectAttendanceFilters> subjectAttendanceFilters(
+      String token) async {
+    final response = await _client.get(
+      Uri.parse('$baseUrl/school/subject-attendance/filters'),
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    return SubjectAttendanceFilters.fromJson(payload);
+  }
+
+  Future<SubjectAttendanceSessionData> subjectAttendanceSession({
+    required String token,
+    required int academicYearId,
+    required int schoolClassId,
+    required String date,
+    required int periodNumber,
+  }) async {
+    final uri = Uri.parse('$baseUrl/school/subject-attendance/session').replace(
+      queryParameters: {
+        'academic_year_id': '$academicYearId',
+        'school_class_id': '$schoolClassId',
+        'date': date,
+        'period_number': '$periodNumber',
+      },
+    );
+
+    final response = await _client.get(
+      uri,
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    return SubjectAttendanceSessionData.fromJson(payload);
+  }
+
+  Future<void> saveSubjectAttendanceSession({
+    required String token,
+    required int academicYearId,
+    required int schoolClassId,
+    required String date,
+    required int periodNumber,
+    required List<SubjectAttendanceRecordDraft> records,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$baseUrl/school/subject-attendance/session'),
+      headers: _headers(token: token, jsonRequest: true),
+      body: jsonEncode({
+        'academic_year_id': academicYearId,
+        'school_class_id': schoolClassId,
+        'date': date,
+        'period_number': periodNumber,
+        'records': records.map((record) => record.toJson()).toList(),
+      }),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
   }
 
   Future<void> logout(String token) async {

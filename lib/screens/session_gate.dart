@@ -142,6 +142,7 @@ class _SessionGateState extends State<SessionGate> {
       return HomeScreen(
         session: _session!,
         dashboard: _dashboard,
+        api: widget.api,
         onRefresh: _refreshDashboard,
         onLogout: _handleLogout,
       );
@@ -160,6 +161,7 @@ class _SessionGateState extends State<SessionGate> {
           return HomeScreen(
             session: result.session!,
             dashboard: result.dashboard,
+            api: widget.api,
             onRefresh: _refreshDashboard,
             onLogout: _handleLogout,
           );
