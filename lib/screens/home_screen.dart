@@ -4,6 +4,7 @@ import '../models/auth_session.dart';
 import '../models/dashboard_data.dart';
 import '../services/laravel_api.dart';
 import 'main_attendance_screen.dart';
+import 'student_list_screen.dart';
 import 'subject_attendance_screen.dart';
 import '../widgets/summary_card.dart';
 
@@ -33,6 +34,9 @@ class HomeScreen extends StatelessWidget {
         'subject_attendance.view',
         'subject_attendance.create',
       ]);
+
+  bool get _canViewStudents =>
+      session.hasPermission('students.view');
 
   @override
   Widget build(BuildContext context) {
@@ -136,7 +140,9 @@ class HomeScreen extends StatelessWidget {
               children: cards.map((card) => SummaryCard(card: card)).toList(),
             ),
             const SizedBox(height: 20),
-            if (_canTakeMainAttendance || _canTakeSubjectAttendance) ...[
+            if (_canViewStudents ||
+                _canTakeMainAttendance ||
+                _canTakeSubjectAttendance) ...[
               Container(
                 padding: const EdgeInsets.all(18),
                 decoration: BoxDecoration(
@@ -147,12 +153,12 @@ class HomeScreen extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Teacher tools',
+                      'Mobile tools',
                       style: theme.textTheme.titleLarge,
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Open daily attendance or subject attendance from the mobile dashboard.',
+                      'Open student, daily attendance, or subject attendance tools from the mobile dashboard.',
                       style: theme.textTheme.bodyMedium,
                     ),
                     const SizedBox(height: 16),
@@ -160,6 +166,21 @@ class HomeScreen extends StatelessWidget {
                       spacing: 12,
                       runSpacing: 12,
                       children: [
+                        if (_canViewStudents)
+                          FilledButton.icon(
+                            onPressed: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                  builder: (_) => StudentListScreen(
+                                    api: api,
+                                    token: session.token,
+                                  ),
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.groups_outlined),
+                            label: const Text('Student List'),
+                          ),
                         if (_canTakeMainAttendance)
                           FilledButton.icon(
                             onPressed: () {

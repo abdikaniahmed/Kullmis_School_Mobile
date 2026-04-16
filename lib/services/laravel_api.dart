@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import '../models/auth_session.dart';
 import '../models/dashboard_data.dart';
 import '../models/main_attendance_models.dart';
+import '../models/student_list_models.dart';
 import '../models/subject_attendance_models.dart';
 
 class LaravelApi {
@@ -171,6 +172,44 @@ class LaravelApi {
 
     final payload = _decode(response);
     _throwIfNeeded(response, payload);
+  }
+
+  Future<StudentListPage> studentList({
+    required String token,
+    required int page,
+    String? search,
+    int? levelId,
+    int? classId,
+  }) async {
+    final queryParameters = <String, String>{
+      'page': '$page',
+    };
+
+    if (search != null && search.isNotEmpty) {
+      queryParameters['search'] = search;
+    }
+
+    if (levelId != null) {
+      queryParameters['level_id'] = '$levelId';
+    }
+
+    if (classId != null) {
+      queryParameters['class_id'] = '$classId';
+    }
+
+    final uri = Uri.parse('$baseUrl/school/students').replace(
+      queryParameters: queryParameters,
+    );
+
+    final response = await _client.get(
+      uri,
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    return StudentListPage.fromJson(payload);
   }
 
   Future<SubjectAttendanceFilters> subjectAttendanceFilters(
