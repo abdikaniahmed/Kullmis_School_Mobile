@@ -38,7 +38,7 @@ Android emulator:
 flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8000/api
 ```
 
-iOS simulator:
+Windows desktop or iOS simulator:
 
 ```powershell
 flutter run --dart-define=API_BASE_URL=http://127.0.0.1:8000/api
@@ -53,5 +53,6 @@ flutter run --dart-define=API_BASE_URL=http://YOUR-LAN-IP:8000/api
 ## Notes
 
 - The mobile app authenticates with bearer tokens, not Laravel session cookies.
+- The default API URL now uses `10.0.2.2` on Android and `127.0.0.1` on Windows, web, and iOS when `API_BASE_URL` is not provided.
 - `school/dashboard` is only available for roles allowed by the Laravel API. A successful login without dashboard data usually means the role authenticated but does not have access to that endpoint.
 - `NSAllowsArbitraryLoads` was enabled in iOS only to simplify local development over HTTP. Tighten that before production.

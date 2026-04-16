@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../models/auth_session.dart';
@@ -12,10 +13,22 @@ import '../models/student_list_models.dart';
 import '../models/subject_attendance_models.dart';
 
 class LaravelApi {
-  static const baseUrl = String.fromEnvironment(
-    'API_BASE_URL',
-    defaultValue: 'http://10.0.2.2:8000/api',
-  );
+  static const _configuredBaseUrl = String.fromEnvironment('API_BASE_URL');
+
+  static String get baseUrl {
+    if (_configuredBaseUrl.isNotEmpty) {
+      return _configuredBaseUrl;
+    }
+
+    if (kIsWeb) {
+      return 'http://127.0.0.1:8000/api';
+    }
+
+    return switch (defaultTargetPlatform) {
+      TargetPlatform.android => 'http://10.0.2.2:8000/api',
+      _ => 'http://127.0.0.1:8000/api',
+    };
+  }
 
   LaravelApi({http.Client? client}) : _client = client ?? http.Client();
 
