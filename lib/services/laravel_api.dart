@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import '../models/auth_session.dart';
 import '../models/discipline_incident_models.dart';
 import '../models/dashboard_data.dart';
+import '../models/fee_models.dart';
 import '../models/main_attendance_models.dart';
 import '../models/student_list_models.dart';
 import '../models/subject_attendance_models.dart';
@@ -83,6 +84,28 @@ class LaravelApi {
     return ActiveAcademicYear.fromJson(payload);
   }
 
+  Future<List<AcademicYearOption>> academicYears(String token) async {
+    final uri = Uri.parse('$baseUrl/school/academic-years').replace(
+      queryParameters: {
+        'per_page': '100',
+      },
+    );
+
+    final response = await _client.get(
+      uri,
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    final data = payload['data'] as List<dynamic>? ?? const [];
+    return data
+        .whereType<Map<String, dynamic>>()
+        .map(AcademicYearOption.fromJson)
+        .toList();
+  }
+
   Future<List<MainAttendanceLevel>> attendanceLevels(String token) async {
     final response = await _client.get(
       Uri.parse('$baseUrl/school/levels'),
@@ -122,6 +145,218 @@ class LaravelApi {
         .whereType<Map<String, dynamic>>()
         .map(MainAttendanceClass.fromJson)
         .toList();
+  }
+
+  Future<List<MainAttendanceClass>> schoolClasses({
+    required String token,
+    int? levelId,
+    bool includeAll = false,
+  }) async {
+    final queryParameters = <String, String>{};
+
+    if (levelId != null) {
+      queryParameters['level_id'] = '$levelId';
+    } else if (includeAll) {
+      queryParameters['all'] = '1';
+    }
+
+    final uri = Uri.parse('$baseUrl/school/classes').replace(
+      queryParameters: queryParameters.isEmpty ? null : queryParameters,
+    );
+
+    final response = await _client.get(
+      uri,
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    final data = payload['data'] as List<dynamic>? ?? const [];
+    return data
+        .whereType<Map<String, dynamic>>()
+        .map(MainAttendanceClass.fromJson)
+        .toList();
+  }
+
+  Future<List<FeeStructureItem>> feeStructures({
+    required String token,
+    required int academicYearId,
+  }) async {
+    final uri = Uri.parse('$baseUrl/school/fees/structures').replace(
+      queryParameters: {
+        'academic_year_id': '$academicYearId',
+      },
+    );
+
+    final response = await _client.get(
+      uri,
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    final data = payload['data'] as List<dynamic>? ?? const [];
+    return data
+        .whereType<Map<String, dynamic>>()
+        .map(FeeStructureItem.fromJson)
+        .toList();
+  }
+
+  Future<void> generateFeeInvoices({
+    required String token,
+    required int academicYearId,
+    int? schoolClassId,
+    String? issueDate,
+    String? dueDate,
+    String? remarks,
+  }) async {
+    final body = <String, dynamic>{
+      'academic_year_id': academicYearId,
+    };
+
+    if (schoolClassId != null) {
+      body['school_class_id'] = schoolClassId;
+    }
+
+    if (issueDate != null && issueDate.isNotEmpty) {
+      body['issue_date'] = issueDate;
+    }
+
+    if (dueDate != null && dueDate.isNotEmpty) {
+      body['due_date'] = dueDate;
+    }
+
+    if (remarks != null && remarks.isNotEmpty) {
+      body['remarks'] = remarks;
+    }
+
+    final response = await _client.post(
+      Uri.parse('$baseUrl/school/fees/invoices/generate'),
+      headers: _headers(token: token, jsonRequest: true),
+      body: jsonEncode(body),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+  }
+
+  Future<FeeInvoicePage> feeInvoices({
+    required String token,
+    required int page,
+    String? status,
+    String? search,
+    int? academicYearId,
+    int? levelId,
+    int? schoolClassId,
+    bool hasBalance = false,
+  }) async {
+    final queryParameters = <String, String>{
+      'page': '$page',
+    };
+
+    if (status != null && status.isNotEmpty) {
+      queryParameters['status'] = status;
+    }
+
+    if (search != null && search.isNotEmpty) {
+      queryParameters['search'] = search;
+    }
+
+    if (academicYearId != null) {
+      queryParameters['academic_year_id'] = '$academicYearId';
+    }
+
+    if (levelId != null) {
+      queryParameters['level_id'] = '$levelId';
+    }
+
+    if (schoolClassId != null) {
+      queryParameters['school_class_id'] = '$schoolClassId';
+    }
+
+    if (hasBalance) {
+      queryParameters['has_balance'] = '1';
+    }
+
+    final uri = Uri.parse('$baseUrl/school/fees/invoices').replace(
+      queryParameters: queryParameters,
+    );
+
+    final response = await _client.get(
+      uri,
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    return FeeInvoicePage.fromJson(payload);
+  }
+
+  Future<FeeInvoiceDetail> feeInvoiceDetail({
+    required String token,
+    required int invoiceId,
+  }) async {
+    final response = await _client.get(
+      Uri.parse('$baseUrl/school/fees/invoices/$invoiceId'),
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    return FeeInvoiceDetail.fromJson(payload);
+  }
+
+  Future<List<FeePaymentMethod>> feePaymentMethods({
+    required String token,
+  }) async {
+    final response = await _client.get(
+      Uri.parse('$baseUrl/school/fees/payment-methods'),
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    final data = payload['data'] as List<dynamic>? ?? const [];
+    return data
+        .whereType<Map<String, dynamic>>()
+        .map(FeePaymentMethod.fromJson)
+        .toList();
+  }
+
+  Future<FeePaymentResult> createFeePayment({
+    required String token,
+    required int feeInvoiceId,
+    required double amount,
+    required String paymentMethod,
+    required String paymentDate,
+    String? referenceNumber,
+  }) async {
+    final body = <String, dynamic>{
+      'fee_invoice_id': feeInvoiceId,
+      'amount': amount,
+      'payment_method': paymentMethod,
+      'payment_date': paymentDate,
+    };
+
+    if (referenceNumber != null && referenceNumber.isNotEmpty) {
+      body['reference_no'] = referenceNumber;
+    }
+
+    final response = await _client.post(
+      Uri.parse('$baseUrl/school/fees/payments'),
+      headers: _headers(token: token, jsonRequest: true),
+      body: jsonEncode(body),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    return FeePaymentResult.fromJson(payload);
   }
 
   Future<MainAttendanceSessionData> mainAttendanceSession({

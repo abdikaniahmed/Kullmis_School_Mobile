@@ -4,6 +4,9 @@ import '../models/auth_session.dart';
 import '../models/dashboard_data.dart';
 import '../services/laravel_api.dart';
 import 'discipline_incidents_screen.dart';
+import 'fee_invoices_screen.dart';
+import 'fee_payments_screen.dart';
+import 'fee_structures_screen.dart';
 import 'main_attendance_screen.dart';
 import 'student_list_screen.dart';
 import 'subject_attendance_screen.dart';
@@ -43,6 +46,14 @@ class HomeScreen extends StatelessWidget {
         'discipline_incidents.view',
         'discipline_incidents.report.view',
       ]);
+
+  bool get _canViewFees => session.hasAnyPermission(const [
+        'fees.view',
+        'fees.generate',
+        'fees.pay',
+      ]);
+
+  bool get _canPayFees => session.hasPermission('fees.pay');
 
   @override
   Widget build(BuildContext context) {
@@ -147,7 +158,8 @@ class HomeScreen extends StatelessWidget {
             ),
             const SizedBox(height: 20),
             if (_canViewStudents ||
-              _canViewDisciplineIncidents ||
+                _canViewDisciplineIncidents ||
+                _canViewFees ||
                 _canTakeMainAttendance ||
                 _canTakeSubjectAttendance) ...[
               Container(
@@ -165,7 +177,7 @@ class HomeScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Open student, discipline, daily attendance, or subject attendance tools from the mobile dashboard.',
+                      'Open student, fee, discipline, daily attendance, or subject attendance tools from the mobile dashboard.',
                       style: theme.textTheme.bodyMedium,
                     ),
                     const SizedBox(height: 16),
@@ -173,6 +185,53 @@ class HomeScreen extends StatelessWidget {
                       spacing: 12,
                       runSpacing: 12,
                       children: [
+                        if (_canViewFees)
+                          FilledButton.icon(
+                            onPressed: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                  builder: (_) => FeeStructuresScreen(
+                                    api: api,
+                                    token: session.token,
+                                  ),
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.request_quote_outlined),
+                            label: const Text('Fees'),
+                          ),
+                        if (_canViewFees)
+                          FilledButton.icon(
+                            onPressed: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                  builder: (_) => FeeInvoicesScreen(
+                                    api: api,
+                                    token: session.token,
+                                    session: session,
+                                  ),
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.receipt_long_outlined),
+                            label: const Text('Fee Invoices'),
+                          ),
+                        if (_canPayFees)
+                          FilledButton.icon(
+                            onPressed: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                  builder: (_) => FeePaymentsScreen(
+                                    api: api,
+                                    token: session.token,
+                                    session: session,
+                                  ),
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.payments_outlined),
+                            label: const Text('Fee Payments'),
+                          ),
                         if (_canViewStudents)
                           FilledButton.icon(
                             onPressed: () {
