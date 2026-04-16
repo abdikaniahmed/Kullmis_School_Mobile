@@ -153,6 +153,7 @@ AuthSession _session({required String token}) {
     name: 'Principal Skinner',
     email: 'admin@example.com',
     roles: const ['Admin'],
+    permissions: const [],
     schoolName: 'Springfield Campus',
   );
 }

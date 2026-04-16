@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 
 import '../models/auth_session.dart';
 import '../models/dashboard_data.dart';
+import '../models/main_attendance_models.dart';
 import '../models/subject_attendance_models.dart';
 
 class LaravelApi {
@@ -66,6 +67,110 @@ class LaravelApi {
     _throwIfNeeded(response, payload);
 
     return DashboardData.fromResponse(payload);
+  }
+
+  Future<ActiveAcademicYear> activeAcademicYear(String token) async {
+    final response = await _client.get(
+      Uri.parse('$baseUrl/school/academic-years/active'),
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    return ActiveAcademicYear.fromJson(payload);
+  }
+
+  Future<List<MainAttendanceLevel>> attendanceLevels(String token) async {
+    final response = await _client.get(
+      Uri.parse('$baseUrl/school/levels'),
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    final data = payload['data'] as List<dynamic>? ?? const [];
+    return data
+        .whereType<Map<String, dynamic>>()
+        .map(MainAttendanceLevel.fromJson)
+        .toList();
+  }
+
+  Future<List<MainAttendanceClass>> attendanceClasses({
+    required String token,
+    required int levelId,
+  }) async {
+    final uri = Uri.parse('$baseUrl/school/classes').replace(
+      queryParameters: {
+        'level_id': '$levelId',
+      },
+    );
+
+    final response = await _client.get(
+      uri,
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    final data = payload['data'] as List<dynamic>? ?? const [];
+    return data
+        .whereType<Map<String, dynamic>>()
+        .map(MainAttendanceClass.fromJson)
+        .toList();
+  }
+
+  Future<MainAttendanceSessionData> mainAttendanceSession({
+    required String token,
+    required int academicYearId,
+    required int schoolClassId,
+    required String date,
+    required String shift,
+  }) async {
+    final uri = Uri.parse('$baseUrl/school/attendance').replace(
+      queryParameters: {
+        'academic_year_id': '$academicYearId',
+        'school_class_id': '$schoolClassId',
+        'date': date,
+        'shift': shift,
+      },
+    );
+
+    final response = await _client.get(
+      uri,
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    return MainAttendanceSessionData.fromJson(payload);
+  }
+
+  Future<void> saveMainAttendance({
+    required String token,
+    required int academicYearId,
+    required int schoolClassId,
+    required String date,
+    required String shift,
+    required List<MainAttendanceRecordDraft> records,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$baseUrl/school/attendance'),
+      headers: _headers(token: token, jsonRequest: true),
+      body: jsonEncode({
+        'academic_year_id': academicYearId,
+        'school_class_id': schoolClassId,
+        'date': date,
+        'shift': shift,
+        'records': records.map((entry) => entry.toJson()).toList(),
+      }),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
   }
 
   Future<SubjectAttendanceFilters> subjectAttendanceFilters(

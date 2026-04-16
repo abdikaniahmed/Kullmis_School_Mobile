@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/auth_session.dart';
 import '../models/dashboard_data.dart';
 import '../services/laravel_api.dart';
+import 'main_attendance_screen.dart';
 import 'subject_attendance_screen.dart';
 import '../widgets/summary_card.dart';
 
@@ -22,8 +23,16 @@ class HomeScreen extends StatelessWidget {
   final Future<void> Function() onRefresh;
   final Future<void> Function() onLogout;
 
-  bool get _canTakeSubjectAttendance =>
-      session.roles.any((role) => role.toLowerCase() == 'teacher');
+  bool get _canTakeMainAttendance => session.hasAnyPermission(const [
+        'attendance.view',
+        'attendance.create',
+        'attendance.edit',
+      ]);
+
+  bool get _canTakeSubjectAttendance => session.hasAnyPermission(const [
+        'subject_attendance.view',
+        'subject_attendance.create',
+      ]);
 
   @override
   Widget build(BuildContext context) {
@@ -127,7 +136,7 @@ class HomeScreen extends StatelessWidget {
               children: cards.map((card) => SummaryCard(card: card)).toList(),
             ),
             const SizedBox(height: 20),
-            if (_canTakeSubjectAttendance) ...[
+            if (_canTakeMainAttendance || _canTakeSubjectAttendance) ...[
               Container(
                 padding: const EdgeInsets.all(18),
                 decoration: BoxDecoration(
@@ -143,23 +152,45 @@ class HomeScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Open subject attendance to load your assigned class period and record each student status.',
+                      'Open daily attendance or subject attendance from the mobile dashboard.',
                       style: theme.textTheme.bodyMedium,
                     ),
                     const SizedBox(height: 16),
-                    FilledButton.icon(
-                      onPressed: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute<void>(
-                            builder: (_) => SubjectAttendanceScreen(
-                              api: api,
-                              token: session.token,
-                            ),
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 12,
+                      children: [
+                        if (_canTakeMainAttendance)
+                          FilledButton.icon(
+                            onPressed: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                  builder: (_) => MainAttendanceScreen(
+                                    api: api,
+                                    token: session.token,
+                                  ),
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.how_to_reg_outlined),
+                            label: const Text('Take Daily Attendance'),
                           ),
-                        );
-                      },
-                      icon: const Icon(Icons.fact_check_outlined),
-                      label: const Text('Take Subject Attendance'),
+                        if (_canTakeSubjectAttendance)
+                          FilledButton.icon(
+                            onPressed: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                  builder: (_) => SubjectAttendanceScreen(
+                                    api: api,
+                                    token: session.token,
+                                  ),
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.fact_check_outlined),
+                            label: const Text('Take Subject Attendance'),
+                          ),
+                      ],
                     ),
                   ],
                 ),
