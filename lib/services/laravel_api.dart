@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../models/auth_session.dart';
+import '../models/discipline_incident_models.dart';
 import '../models/dashboard_data.dart';
 import '../models/main_attendance_models.dart';
 import '../models/student_list_models.dart';
@@ -210,6 +211,104 @@ class LaravelApi {
     _throwIfNeeded(response, payload);
 
     return StudentListPage.fromJson(payload);
+  }
+
+  Future<void> createStudentDisciplineIncident({
+    required String token,
+    required int studentId,
+    required String whatHappened,
+    required String happenedAt,
+    String? actionTaken,
+    String? reportedByName,
+  }) async {
+    final body = <String, dynamic>{
+      'student_id': studentId,
+      'what_happened': whatHappened,
+      'happened_at': happenedAt,
+    };
+
+    if (actionTaken != null && actionTaken.isNotEmpty) {
+      body['action_taken'] = actionTaken;
+    }
+
+    if (reportedByName != null && reportedByName.isNotEmpty) {
+      body['reported_by_name'] = reportedByName;
+    }
+
+    final response = await _client.post(
+      Uri.parse('$baseUrl/school/students/discipline-incidents'),
+      headers: _headers(token: token, jsonRequest: true),
+      body: jsonEncode(body),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+  }
+
+  Future<DisciplineIncidentPage> studentDisciplineIncidents({
+    required String token,
+    required int page,
+    String? search,
+    int? levelId,
+    int? classId,
+    int? studentId,
+  }) async {
+    final queryParameters = <String, String>{
+      'page': '$page',
+    };
+
+    if (search != null && search.isNotEmpty) {
+      queryParameters['search'] = search;
+    }
+
+    if (levelId != null) {
+      queryParameters['level_id'] = '$levelId';
+    }
+
+    if (classId != null) {
+      queryParameters['class_id'] = '$classId';
+    }
+
+    if (studentId != null) {
+      queryParameters['student_id'] = '$studentId';
+    }
+
+    final uri = Uri.parse('$baseUrl/school/students/discipline-incidents')
+        .replace(queryParameters: queryParameters);
+
+    final response = await _client.get(
+      uri,
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    return DisciplineIncidentPage.fromJson(payload);
+  }
+
+  Future<StudentIncidentReport> studentDisciplineIncidentReport({
+    required String token,
+    required int classId,
+    required int studentId,
+  }) async {
+    final uri = Uri.parse('$baseUrl/school/students/discipline-incidents/report')
+        .replace(
+      queryParameters: {
+        'class_id': '$classId',
+        'student_id': '$studentId',
+      },
+    );
+
+    final response = await _client.get(
+      uri,
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    return StudentIncidentReport.fromJson(payload);
   }
 
   Future<SubjectAttendanceFilters> subjectAttendanceFilters(

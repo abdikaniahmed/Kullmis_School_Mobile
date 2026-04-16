@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 
 import '../models/auth_session.dart';
+import '../models/discipline_incident_models.dart';
 import '../models/main_attendance_models.dart';
 import '../models/student_list_models.dart';
 import '../services/laravel_api.dart';
 import 'student_detail_screen.dart';
 
-class StudentListScreen extends StatefulWidget {
-  const StudentListScreen({
+class DisciplineIncidentsScreen extends StatefulWidget {
+  const DisciplineIncidentsScreen({
     super.key,
     required this.api,
     required this.token,
@@ -19,15 +20,16 @@ class StudentListScreen extends StatefulWidget {
   final AuthSession session;
 
   @override
-  State<StudentListScreen> createState() => _StudentListScreenState();
+  State<DisciplineIncidentsScreen> createState() =>
+      _DisciplineIncidentsScreenState();
 }
 
-class _StudentListScreenState extends State<StudentListScreen> {
+class _DisciplineIncidentsScreenState extends State<DisciplineIncidentsScreen> {
   final TextEditingController _searchController = TextEditingController();
 
   List<MainAttendanceLevel> _levels = const [];
   List<MainAttendanceClass> _classes = const [];
-  StudentListPage? _page;
+  DisciplineIncidentPage? _page;
   int? _selectedLevelId;
   int? _selectedClassId;
   bool _loadingMeta = true;
@@ -65,7 +67,7 @@ class _StudentListScreenState extends State<StudentListScreen> {
         _loadingMeta = false;
       });
 
-      await _loadStudents(page: 1);
+      await _loadIncidents(page: 1);
     } on ApiException catch (error) {
       if (!mounted) {
         return;
@@ -82,7 +84,7 @@ class _StudentListScreenState extends State<StudentListScreen> {
 
       setState(() {
         _loadingMeta = false;
-        _error = 'Unable to load student list setup.';
+        _error = 'Unable to load discipline incidents setup.';
       });
     }
   }
@@ -144,14 +146,14 @@ class _StudentListScreenState extends State<StudentListScreen> {
     }
   }
 
-  Future<void> _loadStudents({int page = 1}) async {
+  Future<void> _loadIncidents({int page = 1}) async {
     setState(() {
       _loadingList = true;
       _error = null;
     });
 
     try {
-      final studentPage = await widget.api.studentList(
+      final result = await widget.api.studentDisciplineIncidents(
         token: widget.token,
         page: page,
         search: _searchController.text.trim(),
@@ -164,7 +166,7 @@ class _StudentListScreenState extends State<StudentListScreen> {
       }
 
       setState(() {
-        _page = studentPage;
+        _page = result;
         _loadingList = false;
       });
     } on ApiException catch (error) {
@@ -185,7 +187,7 @@ class _StudentListScreenState extends State<StudentListScreen> {
       setState(() {
         _page = null;
         _loadingList = false;
-        _error = 'Unable to load students.';
+        _error = 'Unable to load discipline incidents.';
       });
     }
   }
@@ -198,7 +200,7 @@ class _StudentListScreenState extends State<StudentListScreen> {
     });
 
     await _loadClasses();
-    await _loadStudents(page: 1);
+    await _loadIncidents(page: 1);
   }
 
   Future<void> _clearFilters() async {
@@ -210,7 +212,7 @@ class _StudentListScreenState extends State<StudentListScreen> {
       _classes = const [];
     });
 
-    await _loadStudents(page: 1);
+    await _loadIncidents(page: 1);
   }
 
   @override
@@ -220,12 +222,12 @@ class _StudentListScreenState extends State<StudentListScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Student List'),
+        title: const Text('Discipline Incidents'),
       ),
       body: _loadingMeta
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
-              onRefresh: () => _loadStudents(page: 1),
+              onRefresh: () => _loadIncidents(page: 1),
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
                 children: [
@@ -238,11 +240,10 @@ class _StudentListScreenState extends State<StudentListScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Find Students',
-                            style: theme.textTheme.titleLarge),
+                        Text('Filter incidents', style: theme.textTheme.titleLarge),
                         const SizedBox(height: 8),
                         Text(
-                          'Search by student name, phone, email, level, or class.',
+                          'Search students, incidents, or reporters, and filter by level or class.',
                           style: theme.textTheme.bodyMedium,
                         ),
                         const SizedBox(height: 18),
@@ -250,12 +251,12 @@ class _StudentListScreenState extends State<StudentListScreen> {
                           controller: _searchController,
                           textInputAction: TextInputAction.search,
                           decoration: const InputDecoration(
-                            labelText: 'Search students',
-                            hintText: 'Name, phone, or email',
+                            labelText: 'Search incidents',
+                            hintText: 'Student, incident, or reporter',
                             border: OutlineInputBorder(),
                             prefixIcon: Icon(Icons.search),
                           ),
-                          onSubmitted: (_) => _loadStudents(page: 1),
+                          onSubmitted: (_) => _loadIncidents(page: 1),
                         ),
                         const SizedBox(height: 14),
                         DropdownButtonFormField<int>(
@@ -307,7 +308,7 @@ class _StudentListScreenState extends State<StudentListScreen> {
                                   setState(() {
                                     _selectedClassId = value;
                                   });
-                                  await _loadStudents(page: 1);
+                                  await _loadIncidents(page: 1);
                                 },
                         ),
                         const SizedBox(height: 16),
@@ -318,7 +319,7 @@ class _StudentListScreenState extends State<StudentListScreen> {
                             FilledButton.icon(
                               onPressed: _loadingList
                                   ? null
-                                  : () => _loadStudents(page: 1),
+                                  : () => _loadIncidents(page: 1),
                               icon: const Icon(Icons.search),
                               label: const Text('Search'),
                             ),
@@ -351,7 +352,7 @@ class _StudentListScreenState extends State<StudentListScreen> {
                         borderRadius: BorderRadius.circular(24),
                       ),
                       child: Text(
-                        'No students found.',
+                        'No discipline incidents found.',
                         style: theme.textTheme.bodyLarge,
                       ),
                     )
@@ -362,28 +363,20 @@ class _StudentListScreenState extends State<StudentListScreen> {
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(24),
                       ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Students', style: theme.textTheme.titleLarge),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Showing ${page.from ?? 0} - ${page.to ?? 0} of ${page.total}',
-                            style: theme.textTheme.bodyMedium,
-                          ),
-                        ],
+                      child: Text(
+                        'Showing ${page.from ?? 0} - ${page.to ?? 0} of ${page.total}',
+                        style: theme.textTheme.bodyMedium,
                       ),
                     ),
                     const SizedBox(height: 14),
-                    ...page.items.map(_buildStudentCard),
+                    ...page.items.map(_buildIncidentCard),
                     const SizedBox(height: 10),
                     Row(
                       children: [
                         Expanded(
                           child: OutlinedButton(
                             onPressed: page.hasPreviousPage && !_loadingList
-                                ? () =>
-                                    _loadStudents(page: page.currentPage - 1)
+                                ? () => _loadIncidents(page: page.currentPage - 1)
                                 : null,
                             child: const Text('Prev'),
                           ),
@@ -392,8 +385,7 @@ class _StudentListScreenState extends State<StudentListScreen> {
                         Expanded(
                           child: FilledButton(
                             onPressed: page.hasNextPage && !_loadingList
-                                ? () =>
-                                    _loadStudents(page: page.currentPage + 1)
+                                ? () => _loadIncidents(page: page.currentPage + 1)
                                 : null,
                             child: const Text('Next'),
                           ),
@@ -407,7 +399,9 @@ class _StudentListScreenState extends State<StudentListScreen> {
     );
   }
 
-  Widget _buildStudentCard(StudentListItem item) {
+  Widget _buildIncidentCard(DisciplineIncidentItem item) {
+    final student = item.student;
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
       child: Container(
@@ -420,46 +414,57 @@ class _StudentListScreenState extends State<StudentListScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              item.name,
+              student?.name ?? 'Unknown student',
               style: const TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
                 color: Color(0xFF1F2933),
               ),
             ),
+            const SizedBox(height: 8),
+            Text(
+              '${student?.levelName ?? '—'} • ${student?.className ?? '—'}',
+              style: const TextStyle(color: Color(0xFF52606D)),
+            ),
             const SizedBox(height: 10),
-            _DetailRow(
-              label: 'Level',
-              value: item.currentYear?.levelName ?? '—',
+            Text(item.whatHappened),
+            const SizedBox(height: 8),
+            Text(
+              'Reported by: ${item.reportedBy ?? '—'}',
+              style: const TextStyle(color: Color(0xFF52606D)),
             ),
-            _DetailRow(
-              label: 'Class',
-              value: item.currentYear?.className ?? '—',
+            Text(
+              'When: ${_formatIncidentDate(item.happenedAt ?? item.createdAt)}',
+              style: const TextStyle(color: Color(0xFF52606D)),
             ),
-            _DetailRow(
-              label: 'Phone',
-              value: item.phone ?? '-',
-            ),
-            const SizedBox(height: 12),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: FilledButton.icon(
-                onPressed: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => StudentDetailScreen(
-                        api: widget.api,
-                        token: widget.token,
-                        session: widget.session,
-                        student: item,
-                      ),
-                    ),
-                  );
-                },
-                icon: const Icon(Icons.person_outline),
-                label: const Text('Open Profile'),
+            if (item.actionTaken != null && item.actionTaken!.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  'Action: ${item.actionTaken}',
+                  style: const TextStyle(color: Color(0xFF52606D)),
+                ),
               ),
-            ),
+            if (student != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: FilledButton.icon(
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => StudentDetailScreen(
+                          api: widget.api,
+                          token: widget.token,
+                          session: widget.session,
+                          student: _studentSummaryToListItem(student),
+                        ),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.person_outline),
+                  label: const Text('Open Student Profile'),
+                ),
+              ),
           ],
         ),
       ),
@@ -467,36 +472,36 @@ class _StudentListScreenState extends State<StudentListScreen> {
   }
 }
 
-class _DetailRow extends StatelessWidget {
-  const _DetailRow({
-    required this.label,
-    required this.value,
-  });
+StudentListItem _studentSummaryToListItem(
+  DisciplineIncidentStudentSummary student,
+) {
+  return StudentListItem(
+    id: student.id,
+    name: student.name,
+    phone: student.phone,
+    currentYear: StudentCurrentYear(
+      levelId: student.levelId,
+      classId: student.classId,
+      rollNumber: student.rollNumber,
+      levelName: student.levelName,
+      className: student.className,
+    ),
+  );
+}
 
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 72,
-            child: Text(
-              label,
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: Theme.of(context).textTheme.bodyLarge,
-            ),
-          ),
-        ],
-      ),
-    );
+String _formatIncidentDate(String? value) {
+  if (value == null || value.isEmpty) {
+    return '—';
   }
+
+  final parsed = DateTime.tryParse(value);
+  if (parsed == null) {
+    return value;
+  }
+
+  final month = parsed.month.toString().padLeft(2, '0');
+  final day = parsed.day.toString().padLeft(2, '0');
+  final hour = parsed.hour.toString().padLeft(2, '0');
+  final minute = parsed.minute.toString().padLeft(2, '0');
+  return '${parsed.year}-$month-$day $hour:$minute';
 }

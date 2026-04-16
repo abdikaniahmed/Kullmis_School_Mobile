@@ -63,10 +63,16 @@ class StudentListItem {
 
 class StudentCurrentYear {
   const StudentCurrentYear({
+    required this.levelId,
+    required this.classId,
+    required this.rollNumber,
     required this.levelName,
     required this.className,
   });
 
+  final int? levelId;
+  final int? classId;
+  final String? rollNumber;
   final String? levelName;
   final String? className;
 
@@ -89,8 +95,27 @@ class StudentCurrentYear {
     }
 
     return StudentCurrentYear(
+      levelId: _toNullableInt(value['level_id']),
+      classId: _toNullableInt(value['school_class_id']),
+      rollNumber: _toNullableString(value['roll_number']),
       levelName: levelName,
       className: className,
+    );
+  }
+}
+
+extension DisciplineStudentMapper on StudentListItem {
+  StudentListItem copyWith({
+    int? id,
+    String? name,
+    String? phone,
+    StudentCurrentYear? currentYear,
+  }) {
+    return StudentListItem(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      phone: phone ?? this.phone,
+      currentYear: currentYear ?? this.currentYear,
     );
   }
 }

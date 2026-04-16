@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/auth_session.dart';
 import '../models/dashboard_data.dart';
 import '../services/laravel_api.dart';
+import 'discipline_incidents_screen.dart';
 import 'main_attendance_screen.dart';
 import 'student_list_screen.dart';
 import 'subject_attendance_screen.dart';
@@ -37,6 +38,11 @@ class HomeScreen extends StatelessWidget {
 
   bool get _canViewStudents =>
       session.hasPermission('students.view');
+
+  bool get _canViewDisciplineIncidents => session.hasAnyPermission(const [
+        'discipline_incidents.view',
+        'discipline_incidents.report.view',
+      ]);
 
   @override
   Widget build(BuildContext context) {
@@ -141,6 +147,7 @@ class HomeScreen extends StatelessWidget {
             ),
             const SizedBox(height: 20),
             if (_canViewStudents ||
+              _canViewDisciplineIncidents ||
                 _canTakeMainAttendance ||
                 _canTakeSubjectAttendance) ...[
               Container(
@@ -158,7 +165,7 @@ class HomeScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Open student, daily attendance, or subject attendance tools from the mobile dashboard.',
+                      'Open student, discipline, daily attendance, or subject attendance tools from the mobile dashboard.',
                       style: theme.textTheme.bodyMedium,
                     ),
                     const SizedBox(height: 16),
@@ -174,12 +181,29 @@ class HomeScreen extends StatelessWidget {
                                   builder: (_) => StudentListScreen(
                                     api: api,
                                     token: session.token,
+                                    session: session,
                                   ),
                                 ),
                               );
                             },
                             icon: const Icon(Icons.groups_outlined),
                             label: const Text('Student List'),
+                          ),
+                        if (_canViewDisciplineIncidents)
+                          FilledButton.icon(
+                            onPressed: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                  builder: (_) => DisciplineIncidentsScreen(
+                                    api: api,
+                                    token: session.token,
+                                    session: session,
+                                  ),
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.report_problem_outlined),
+                            label: const Text('Discipline Incidents'),
                           ),
                         if (_canTakeMainAttendance)
                           FilledButton.icon(
