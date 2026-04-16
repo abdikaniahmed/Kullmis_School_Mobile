@@ -133,7 +133,11 @@ class _StudentDetailScreenState extends State<StudentDetailScreen> {
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
-                  colors: [Color(0xFF115E59), Color(0xFF0F766E), Color(0xFF134E4A)],
+                  colors: [
+                    Color(0xFF115E59),
+                    Color(0xFF0F766E),
+                    Color(0xFF134E4A)
+                  ],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
@@ -160,9 +164,12 @@ class _StudentDetailScreenState extends State<StudentDetailScreen> {
                     spacing: 12,
                     runSpacing: 12,
                     children: [
-                      _InfoChip(label: 'Roll', value: currentYear?.rollNumber ?? '—'),
-                      _InfoChip(label: 'Level', value: currentYear?.levelName ?? '—'),
-                      _InfoChip(label: 'Class', value: currentYear?.className ?? '—'),
+                      _InfoChip(
+                          label: 'Roll', value: currentYear?.rollNumber ?? '—'),
+                      _InfoChip(
+                          label: 'Level', value: currentYear?.levelName ?? '—'),
+                      _InfoChip(
+                          label: 'Class', value: currentYear?.className ?? '—'),
                     ],
                   ),
                 ],
