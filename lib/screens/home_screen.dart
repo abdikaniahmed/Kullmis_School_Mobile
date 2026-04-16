@@ -4,6 +4,8 @@ import '../models/auth_session.dart';
 import '../models/dashboard_data.dart';
 import '../services/laravel_api.dart';
 import 'discipline_incidents_screen.dart';
+import 'exam_mark_entry_screen.dart';
+import 'exam_report_screen.dart';
 import 'fee_invoices_screen.dart';
 import 'fee_payments_screen.dart';
 import 'fee_structures_screen.dart';
@@ -39,8 +41,7 @@ class HomeScreen extends StatelessWidget {
         'subject_attendance.create',
       ]);
 
-  bool get _canViewStudents =>
-      session.hasPermission('students.view');
+  bool get _canViewStudents => session.hasPermission('students.view');
 
   bool get _canViewDisciplineIncidents => session.hasAnyPermission(const [
         'discipline_incidents.view',
@@ -52,6 +53,14 @@ class HomeScreen extends StatelessWidget {
         'fees.generate',
         'fees.pay',
       ]);
+
+  bool get _canEnterExamMarks => session.hasAnyPermission(const [
+        'marks.create',
+        'marks.view',
+        'exams.view',
+      ]);
+
+  bool get _canViewExamReports => session.hasPermission('marks.view');
 
   bool get _canPayFees => session.hasPermission('fees.pay');
 
@@ -160,6 +169,8 @@ class HomeScreen extends StatelessWidget {
             if (_canViewStudents ||
                 _canViewDisciplineIncidents ||
                 _canViewFees ||
+                _canEnterExamMarks ||
+                _canViewExamReports ||
                 _canTakeMainAttendance ||
                 _canTakeSubjectAttendance) ...[
               Container(
@@ -177,7 +188,7 @@ class HomeScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Open student, fee, discipline, daily attendance, or subject attendance tools from the mobile dashboard.',
+                      'Open student, fee, exam, discipline, daily attendance, or subject attendance tools from the mobile dashboard.',
                       style: theme.textTheme.bodyMedium,
                     ),
                     const SizedBox(height: 16),
@@ -247,6 +258,38 @@ class HomeScreen extends StatelessWidget {
                             },
                             icon: const Icon(Icons.groups_outlined),
                             label: const Text('Student List'),
+                          ),
+                        if (_canEnterExamMarks)
+                          FilledButton.icon(
+                            onPressed: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                  builder: (_) => ExamMarkEntryScreen(
+                                    api: api,
+                                    token: session.token,
+                                    canViewMarks:
+                                        session.hasPermission('marks.view'),
+                                  ),
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.edit_note_outlined),
+                            label: const Text('Exam Mark Entry'),
+                          ),
+                        if (_canViewExamReports)
+                          FilledButton.icon(
+                            onPressed: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                  builder: (_) => ExamReportScreen(
+                                    api: api,
+                                    token: session.token,
+                                  ),
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.assessment_outlined),
+                            label: const Text('Exam Report'),
                           ),
                         if (_canViewDisciplineIncidents)
                           FilledButton.icon(

@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import '../models/auth_session.dart';
 import '../models/discipline_incident_models.dart';
 import '../models/dashboard_data.dart';
+import '../models/exam_models.dart';
 import '../models/fee_models.dart';
 import '../models/main_attendance_models.dart';
 import '../models/student_list_models.dart';
@@ -448,6 +449,176 @@ class LaravelApi {
     return StudentListPage.fromJson(payload);
   }
 
+  Future<List<ExamTermOption>> terms({
+    required String token,
+    required int academicYearId,
+  }) async {
+    final uri = Uri.parse('$baseUrl/school/terms').replace(
+      queryParameters: {
+        'academic_year_id': '$academicYearId',
+      },
+    );
+
+    final response = await _client.get(
+      uri,
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    final data = payload['data'] as List<dynamic>? ?? const [];
+    return data
+        .whereType<Map<String, dynamic>>()
+        .map(ExamTermOption.fromJson)
+        .toList();
+  }
+
+  Future<List<ExamOption>> exams({
+    required String token,
+    int? academicYearId,
+    int? termId,
+  }) async {
+    final queryParameters = <String, String>{};
+
+    if (academicYearId != null) {
+      queryParameters['academic_year_id'] = '$academicYearId';
+    }
+
+    if (termId != null) {
+      queryParameters['term_id'] = '$termId';
+    }
+
+    final uri = Uri.parse('$baseUrl/school/exams').replace(
+      queryParameters: queryParameters.isEmpty ? null : queryParameters,
+    );
+
+    final response = await _client.get(
+      uri,
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    final data = payload['data'] as List<dynamic>? ?? const [];
+    return data
+        .whereType<Map<String, dynamic>>()
+        .map(ExamOption.fromJson)
+        .toList();
+  }
+
+  Future<List<ExamSubjectOption>> subjects({
+    required String token,
+  }) async {
+    final results = <ExamSubjectOption>[];
+    var page = 1;
+    var hasNext = true;
+
+    while (hasNext) {
+      final uri = Uri.parse('$baseUrl/school/subjects').replace(
+        queryParameters: {
+          'page': '$page',
+        },
+      );
+
+      final response = await _client.get(
+        uri,
+        headers: _headers(token: token),
+      );
+
+      final payload = _decode(response);
+      _throwIfNeeded(response, payload);
+
+      final data = payload['data'] as List<dynamic>? ?? const [];
+      results.addAll(
+        data.whereType<Map<String, dynamic>>().map(ExamSubjectOption.fromJson),
+      );
+
+      hasNext = payload['next_page_url'] != null;
+      page += 1;
+    }
+
+    return results;
+  }
+
+  Future<List<ClassMarkEntry>> classMarks({
+    required String token,
+    required int classId,
+    required int examId,
+    required int subjectId,
+  }) async {
+    final uri = Uri.parse('$baseUrl/school/marks/class').replace(
+      queryParameters: {
+        'class_id': '$classId',
+        'exam_id': '$examId',
+        'subject_id': '$subjectId',
+      },
+    );
+
+    final response = await _client.get(
+      uri,
+      headers: _headers(token: token),
+    );
+
+    final payload = _decodeList(response);
+    return payload
+        .whereType<Map<String, dynamic>>()
+        .map(ClassMarkEntry.fromJson)
+        .toList();
+  }
+
+  Future<void> saveBulkMarks({
+    required String token,
+    required int classId,
+    required List<ExamMarkDraft> marks,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$baseUrl/school/marks/bulk'),
+      headers: _headers(token: token, jsonRequest: true),
+      body: jsonEncode({
+        'class_id': classId,
+        'marks': marks.map((entry) => entry.toJson()).toList(),
+      }),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+  }
+
+  Future<ExamReportCard> studentReportCard({
+    required String token,
+    required int studentId,
+    required int academicYearId,
+    int? termId,
+    int? examId,
+  }) async {
+    final queryParameters = <String, String>{
+      'academic_year_id': '$academicYearId',
+    };
+
+    if (termId != null) {
+      queryParameters['term_id'] = '$termId';
+    }
+
+    if (examId != null) {
+      queryParameters['exam_id'] = '$examId';
+    }
+
+    final uri = Uri.parse('$baseUrl/school/report-cards/student/$studentId')
+        .replace(queryParameters: queryParameters);
+
+    final response = await _client.get(
+      uri,
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    return ExamReportCard.fromJson(payload);
+  }
+
   Future<void> createStudentDisciplineIncident({
     required String token,
     required int studentId,
@@ -527,8 +698,9 @@ class LaravelApi {
     required int classId,
     required int studentId,
   }) async {
-    final uri = Uri.parse('$baseUrl/school/students/discipline-incidents/report')
-        .replace(
+    final uri =
+        Uri.parse('$baseUrl/school/students/discipline-incidents/report')
+            .replace(
       queryParameters: {
         'class_id': '$classId',
         'student_id': '$studentId',
@@ -652,6 +824,38 @@ class LaravelApi {
     }
 
     return const {};
+  }
+
+  List<dynamic> _decodeList(http.Response response) {
+    if (response.body.isEmpty) {
+      return const [];
+    }
+
+    try {
+      final decoded = jsonDecode(response.body);
+
+      if (decoded is List<dynamic>) {
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          return decoded;
+        }
+
+        final payload = <String, dynamic>{'message': 'Request failed.'};
+        _throwIfNeeded(response, payload);
+      }
+
+      if (decoded is Map<String, dynamic>) {
+        _throwIfNeeded(response, decoded);
+      }
+    } on FormatException {
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw ApiException(
+          'Request failed with status ${response.statusCode}.',
+          statusCode: response.statusCode,
+        );
+      }
+    }
+
+    return const [];
   }
 
   void _throwIfNeeded(http.Response response, Map<String, dynamic> payload) {
