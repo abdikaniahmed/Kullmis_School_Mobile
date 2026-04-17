@@ -2,16 +2,11 @@ import 'package:flutter/material.dart';
 
 import '../models/auth_session.dart';
 import '../models/main_attendance_models.dart';
-import '../models/student_list_models.dart';
+import '../models/student_management_models.dart';
 import '../services/laravel_api.dart';
-import 'exam_report_screen.dart';
-import 'student_detail_screen.dart';
-import 'students_create_screen.dart';
-import 'students_edit_screen.dart';
-import 'students_upload_screen.dart';
 
-class StudentListScreen extends StatefulWidget {
-  const StudentListScreen({
+class StudentsDisabledScreen extends StatefulWidget {
+  const StudentsDisabledScreen({
     super.key,
     required this.api,
     required this.token,
@@ -23,26 +18,21 @@ class StudentListScreen extends StatefulWidget {
   final AuthSession session;
 
   @override
-  State<StudentListScreen> createState() => _StudentListScreenState();
+  State<StudentsDisabledScreen> createState() => _StudentsDisabledScreenState();
 }
 
-class _StudentListScreenState extends State<StudentListScreen> {
+class _StudentsDisabledScreenState extends State<StudentsDisabledScreen> {
   final TextEditingController _searchController = TextEditingController();
 
   List<MainAttendanceLevel> _levels = const [];
   List<MainAttendanceClass> _classes = const [];
-  StudentListPage? _page;
+  DisabledStudentPage? _page;
   int? _selectedLevelId;
   int? _selectedClassId;
   bool _loadingMeta = true;
   bool _loadingClasses = false;
   bool _loadingList = false;
   String? _error;
-
-  bool get _canCreate => widget.session.hasPermission('students.create');
-  bool get _canEdit => widget.session.hasPermission('students.edit');
-  bool get _canDelete => widget.session.hasPermission('students.delete');
-  bool get _canViewMarks => widget.session.hasPermission('marks.view');
 
   @override
   void initState() {
@@ -74,7 +64,7 @@ class _StudentListScreenState extends State<StudentListScreen> {
         _loadingMeta = false;
       });
 
-      await _loadStudents(page: 1);
+      await _loadDisabledStudents(page: 1);
     } on ApiException catch (error) {
       if (!mounted) {
         return;
@@ -91,7 +81,7 @@ class _StudentListScreenState extends State<StudentListScreen> {
 
       setState(() {
         _loadingMeta = false;
-        _error = 'Unable to load student list setup.';
+        _error = 'Unable to load disabled student setup.';
       });
     }
   }
@@ -153,14 +143,14 @@ class _StudentListScreenState extends State<StudentListScreen> {
     }
   }
 
-  Future<void> _loadStudents({int page = 1}) async {
+  Future<void> _loadDisabledStudents({int page = 1}) async {
     setState(() {
       _loadingList = true;
       _error = null;
     });
 
     try {
-      final studentPage = await widget.api.studentList(
+      final result = await widget.api.disabledStudents(
         token: widget.token,
         page: page,
         search: _searchController.text.trim(),
@@ -173,7 +163,7 @@ class _StudentListScreenState extends State<StudentListScreen> {
       }
 
       setState(() {
-        _page = studentPage;
+        _page = result;
         _loadingList = false;
       });
     } on ApiException catch (error) {
@@ -194,7 +184,7 @@ class _StudentListScreenState extends State<StudentListScreen> {
       setState(() {
         _page = null;
         _loadingList = false;
-        _error = 'Unable to load students.';
+        _error = 'Unable to load disabled students.';
       });
     }
   }
@@ -207,7 +197,7 @@ class _StudentListScreenState extends State<StudentListScreen> {
     });
 
     await _loadClasses();
-    await _loadStudents(page: 1);
+    await _loadDisabledStudents(page: 1);
   }
 
   Future<void> _clearFilters() async {
@@ -219,7 +209,78 @@ class _StudentListScreenState extends State<StudentListScreen> {
       _classes = const [];
     });
 
-    await _loadStudents(page: 1);
+    await _loadDisabledStudents(page: 1);
+  }
+
+  Future<void> _openActivateDialog(DisabledStudentItem item) async {
+    final controller = TextEditingController();
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Activate Student'),
+          content: TextField(
+            controller: controller,
+            decoration: const InputDecoration(
+              labelText: 'Reason for activation',
+              border: OutlineInputBorder(),
+            ),
+            minLines: 2,
+            maxLines: 4,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Activate'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) {
+      return;
+    }
+
+    final reason = controller.text.trim();
+    if (reason.isEmpty) {
+      _showMessage('Provide an activation reason.');
+      return;
+    }
+
+    try {
+      await widget.api.activateStudent(
+        token: widget.token,
+        studentId: item.id,
+        reason: reason,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      _showMessage('Student activated successfully.');
+      await _loadDisabledStudents(page: _page?.currentPage ?? 1);
+    } on ApiException catch (error) {
+      _showMessage(error.message);
+    } catch (_) {
+      _showMessage('Unable to activate student.');
+    }
+  }
+
+  void _showMessage(String message) {
+    if (!mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -229,12 +290,12 @@ class _StudentListScreenState extends State<StudentListScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Student List'),
+        title: const Text('Disabled Students'),
       ),
       body: _loadingMeta
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
-              onRefresh: () => _loadStudents(page: 1),
+              onRefresh: () => _loadDisabledStudents(page: 1),
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
                 children: [
@@ -247,72 +308,11 @@ class _StudentListScreenState extends State<StudentListScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text('Students',
-                                  style: theme.textTheme.titleLarge),
-                            ),
-                            if (_canCreate)
-                              Wrap(
-                                spacing: 8,
-                                children: [
-                                  OutlinedButton.icon(
-                                    onPressed: () {
-                                      Navigator.of(context).push(
-                                        MaterialPageRoute<void>(
-                                          builder: (_) => StudentsUploadScreen(
-                                            api: widget.api,
-                                            token: widget.token,
-                                          ),
-                                        ),
-                                      );
-                                    },
-                                    icon: const Icon(Icons.upload_file),
-                                    label: const Text('Upload'),
-                                  ),
-                                  FilledButton.icon(
-                                    onPressed: () {
-                                      Navigator.of(context).push(
-                                        MaterialPageRoute<void>(
-                                          builder: (_) => StudentsCreateScreen(
-                                            api: widget.api,
-                                            token: widget.token,
-                                            session: widget.session,
-                                          ),
-                                        ),
-                                      );
-                                    },
-                                    icon: const Icon(Icons.person_add_alt_1),
-                                    label: const Text('Add Student'),
-                                  ),
-                                ],
-                              ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Search by student name, phone, email, level, or class.',
-                          style: theme.textTheme.bodyMedium,
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(24),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Find Students',
+                        Text('Find disabled students',
                             style: theme.textTheme.titleLarge),
                         const SizedBox(height: 8),
                         Text(
-                          'Search by student name, phone, email, level, or class.',
+                          'Search by name, phone, level, or class.',
                           style: theme.textTheme.bodyMedium,
                         ),
                         const SizedBox(height: 18),
@@ -320,12 +320,11 @@ class _StudentListScreenState extends State<StudentListScreen> {
                           controller: _searchController,
                           textInputAction: TextInputAction.search,
                           decoration: const InputDecoration(
-                            labelText: 'Search students',
-                            hintText: 'Name, phone, or email',
+                            labelText: 'Search disabled students',
                             border: OutlineInputBorder(),
                             prefixIcon: Icon(Icons.search),
                           ),
-                          onSubmitted: (_) => _loadStudents(page: 1),
+                          onSubmitted: (_) => _loadDisabledStudents(page: 1),
                         ),
                         const SizedBox(height: 14),
                         DropdownButtonFormField<int>(
@@ -377,7 +376,7 @@ class _StudentListScreenState extends State<StudentListScreen> {
                                   setState(() {
                                     _selectedClassId = value;
                                   });
-                                  await _loadStudents(page: 1);
+                                  await _loadDisabledStudents(page: 1);
                                 },
                         ),
                         const SizedBox(height: 16),
@@ -388,7 +387,7 @@ class _StudentListScreenState extends State<StudentListScreen> {
                             FilledButton.icon(
                               onPressed: _loadingList
                                   ? null
-                                  : () => _loadStudents(page: 1),
+                                  : () => _loadDisabledStudents(page: 1),
                               icon: const Icon(Icons.search),
                               label: const Text('Search'),
                             ),
@@ -421,7 +420,7 @@ class _StudentListScreenState extends State<StudentListScreen> {
                         borderRadius: BorderRadius.circular(24),
                       ),
                       child: Text(
-                        'No students found.',
+                        'No disabled students found.',
                         style: theme.textTheme.bodyLarge,
                       ),
                     )
@@ -435,7 +434,8 @@ class _StudentListScreenState extends State<StudentListScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Students', style: theme.textTheme.titleLarge),
+                          Text('Disabled Students',
+                              style: theme.textTheme.titleLarge),
                           const SizedBox(height: 4),
                           Text(
                             'Showing ${page.from ?? 0} - ${page.to ?? 0} of ${page.total}',
@@ -452,8 +452,8 @@ class _StudentListScreenState extends State<StudentListScreen> {
                         Expanded(
                           child: OutlinedButton(
                             onPressed: page.hasPreviousPage && !_loadingList
-                                ? () =>
-                                    _loadStudents(page: page.currentPage - 1)
+                                ? () => _loadDisabledStudents(
+                                    page: page.currentPage - 1)
                                 : null,
                             child: const Text('Prev'),
                           ),
@@ -462,8 +462,8 @@ class _StudentListScreenState extends State<StudentListScreen> {
                         Expanded(
                           child: FilledButton(
                             onPressed: page.hasNextPage && !_loadingList
-                                ? () =>
-                                    _loadStudents(page: page.currentPage + 1)
+                                ? () => _loadDisabledStudents(
+                                    page: page.currentPage + 1)
                                 : null,
                             child: const Text('Next'),
                           ),
@@ -477,7 +477,7 @@ class _StudentListScreenState extends State<StudentListScreen> {
     );
   }
 
-  Widget _buildStudentCard(StudentListItem item) {
+  Widget _buildStudentCard(DisabledStudentItem item) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
       child: Container(
@@ -506,194 +506,21 @@ class _StudentListScreenState extends State<StudentListScreen> {
               label: 'Class',
               value: item.currentYear?.className ?? '—',
             ),
-            _DetailRow(
-              label: 'Phone',
-              value: item.phone ?? '-',
-            ),
+            _DetailRow(label: 'Phone', value: item.phone ?? '-'),
+            _DetailRow(label: 'Reason', value: item.disableReason ?? '-'),
             const SizedBox(height: 12),
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: [
-                FilledButton.icon(
-                  onPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => StudentDetailScreen(
-                          api: widget.api,
-                          token: widget.token,
-                          session: widget.session,
-                          student: item,
-                        ),
-                      ),
-                    );
-                  },
-                  icon: const Icon(Icons.person_outline),
-                  label: const Text('Open Profile'),
-                ),
-                if (_canViewMarks)
-                  OutlinedButton.icon(
-                    onPressed: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) => ExamReportScreen(
-                            api: widget.api,
-                            token: widget.token,
-                          ),
-                        ),
-                      );
-                    },
-                    icon: const Icon(Icons.assessment_outlined),
-                    label: const Text('Gradebook'),
-                  ),
-                if (_canEdit)
-                  OutlinedButton.icon(
-                    onPressed: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) => StudentsEditScreen(
-                            api: widget.api,
-                            token: widget.token,
-                            session: widget.session,
-                            studentId: item.id,
-                          ),
-                        ),
-                      );
-                    },
-                    icon: const Icon(Icons.edit_outlined),
-                    label: const Text('Edit'),
-                  ),
-                if (_canEdit)
-                  OutlinedButton.icon(
-                    onPressed: () => _promptDisable(item),
-                    icon: const Icon(Icons.block_outlined),
-                    label: const Text('Disable'),
-                  ),
-                if (_canDelete)
-                  OutlinedButton.icon(
-                    onPressed: () => _confirmDelete(item),
-                    icon: const Icon(Icons.delete_outline),
-                    label: const Text('Delete'),
-                  ),
-              ],
+            Align(
+              alignment: Alignment.centerLeft,
+              child: FilledButton.icon(
+                onPressed: () => _openActivateDialog(item),
+                icon: const Icon(Icons.check_circle_outline),
+                label: const Text('Activate'),
+              ),
             ),
           ],
         ),
       ),
     );
-  }
-}
-
-extension on _StudentListScreenState {
-  Future<void> _promptDisable(StudentListItem item) async {
-    final controller = TextEditingController();
-
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Disable Student'),
-        content: TextField(
-          controller: controller,
-          minLines: 2,
-          maxLines: 4,
-          decoration: const InputDecoration(
-            labelText: 'Reason for disabling',
-            border: OutlineInputBorder(),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Disable'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed != true) {
-      return;
-    }
-
-    final reason = controller.text.trim();
-    if (reason.isEmpty) {
-      _showMessage('Provide a disable reason.');
-      return;
-    }
-
-    try {
-      await widget.api.disableStudent(
-        token: widget.token,
-        studentId: item.id,
-        reason: reason,
-      );
-
-      if (!mounted) {
-        return;
-      }
-
-      _showMessage('Student disabled.');
-      await _loadStudents(page: _page?.currentPage ?? 1);
-    } on ApiException catch (error) {
-      _showMessage(error.message);
-    } catch (_) {
-      _showMessage('Unable to disable student.');
-    }
-  }
-
-  Future<void> _confirmDelete(StudentListItem item) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete Student'),
-        content: Text('Delete ${item.name}? This action cannot be undone.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed != true) {
-      return;
-    }
-
-    try {
-      await widget.api.deleteStudent(
-        token: widget.token,
-        studentId: item.id,
-      );
-
-      if (!mounted) {
-        return;
-      }
-
-      _showMessage('Student deleted.');
-      await _loadStudents(page: _page?.currentPage ?? 1);
-    } on ApiException catch (error) {
-      _showMessage(error.message);
-    } catch (_) {
-      _showMessage('Unable to delete student.');
-    }
-  }
-
-  void _showMessage(String message) {
-    if (!mounted) {
-      return;
-    }
-
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
   }
 }
 

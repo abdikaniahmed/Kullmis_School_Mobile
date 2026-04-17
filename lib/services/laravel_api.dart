@@ -9,6 +9,7 @@ import '../models/dashboard_data.dart';
 import '../models/exam_models.dart';
 import '../models/fee_models.dart';
 import '../models/main_attendance_models.dart';
+import '../models/student_management_models.dart';
 import '../models/student_list_models.dart';
 import '../models/subject_attendance_models.dart';
 
@@ -190,6 +191,38 @@ class LaravelApi {
     return data
         .whereType<Map<String, dynamic>>()
         .map(MainAttendanceClass.fromJson)
+        .toList();
+  }
+
+  Future<List<SchoolClassOption>> schoolClassesWithSection({
+    required String token,
+    int? levelId,
+    bool includeAll = false,
+  }) async {
+    final queryParameters = <String, String>{};
+
+    if (levelId != null) {
+      queryParameters['level_id'] = '$levelId';
+    } else if (includeAll) {
+      queryParameters['all'] = '1';
+    }
+
+    final uri = Uri.parse('$baseUrl/school/classes').replace(
+      queryParameters: queryParameters.isEmpty ? null : queryParameters,
+    );
+
+    final response = await _client.get(
+      uri,
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    final data = payload['data'] as List<dynamic>? ?? const [];
+    return data
+        .whereType<Map<String, dynamic>>()
+        .map(SchoolClassOption.fromJson)
         .toList();
   }
 
@@ -460,6 +493,309 @@ class LaravelApi {
     _throwIfNeeded(response, payload);
 
     return StudentListPage.fromJson(payload);
+  }
+
+  Future<StudentProfile> studentDetail({
+    required String token,
+    required int studentId,
+  }) async {
+    final response = await _client.get(
+      Uri.parse('$baseUrl/school/students/$studentId'),
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    return StudentProfile.fromJson(payload);
+  }
+
+  Future<StudentCreateResult> createStudent({
+    required String token,
+    required Map<String, dynamic> payload,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$baseUrl/school/students'),
+      headers: _headers(token: token, jsonRequest: true),
+      body: jsonEncode(payload),
+    );
+
+    final body = _decode(response);
+    _throwIfNeeded(response, body);
+
+    return StudentCreateResult.fromJson(body);
+  }
+
+  Future<void> updateStudent({
+    required String token,
+    required int studentId,
+    required Map<String, dynamic> payload,
+  }) async {
+    final response = await _client.put(
+      Uri.parse('$baseUrl/school/students/$studentId'),
+      headers: _headers(token: token, jsonRequest: true),
+      body: jsonEncode(payload),
+    );
+
+    final body = _decode(response);
+    _throwIfNeeded(response, body);
+  }
+
+  Future<void> deleteStudent({
+    required String token,
+    required int studentId,
+  }) async {
+    final response = await _client.delete(
+      Uri.parse('$baseUrl/school/students/$studentId'),
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+  }
+
+  Future<void> disableStudent({
+    required String token,
+    required int studentId,
+    required String reason,
+  }) async {
+    final response = await _client.patch(
+      Uri.parse('$baseUrl/school/students/$studentId/disable'),
+      headers: _headers(token: token, jsonRequest: true),
+      body: jsonEncode({'reason': reason}),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+  }
+
+  Future<void> activateStudent({
+    required String token,
+    required int studentId,
+    required String reason,
+  }) async {
+    final response = await _client.patch(
+      Uri.parse('$baseUrl/school/students/$studentId/activate'),
+      headers: _headers(token: token, jsonRequest: true),
+      body: jsonEncode({'reason': reason}),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+  }
+
+  Future<DisabledStudentPage> disabledStudents({
+    required String token,
+    required int page,
+    String? search,
+    int? levelId,
+    int? classId,
+  }) async {
+    final queryParameters = <String, String>{
+      'page': '$page',
+    };
+
+    if (search != null && search.isNotEmpty) {
+      queryParameters['search'] = search;
+    }
+
+    if (levelId != null) {
+      queryParameters['level_id'] = '$levelId';
+    }
+
+    if (classId != null) {
+      queryParameters['class_id'] = '$classId';
+    }
+
+    final uri = Uri.parse('$baseUrl/school/students/disabled').replace(
+      queryParameters: queryParameters,
+    );
+
+    final response = await _client.get(
+      uri,
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    return DisabledStudentPage.fromJson(payload);
+  }
+
+  Future<GraduatesPage> graduateStudents({
+    required String token,
+    required int page,
+    String? search,
+    int? academicYearId,
+  }) async {
+    final queryParameters = <String, String>{
+      'page': '$page',
+    };
+
+    if (search != null && search.isNotEmpty) {
+      queryParameters['search'] = search;
+    }
+
+    if (academicYearId != null) {
+      queryParameters['academic_year_id'] = '$academicYearId';
+    }
+
+    final uri = Uri.parse('$baseUrl/school/students/graduates').replace(
+      queryParameters: queryParameters,
+    );
+
+    final response = await _client.get(
+      uri,
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    return GraduatesPage.fromJson(payload);
+  }
+
+  Future<StudentListReport> studentListReport({
+    required String token,
+    required Map<String, String> queryParameters,
+  }) async {
+    final uri = Uri.parse('$baseUrl/school/students/report/list').replace(
+      queryParameters: queryParameters,
+    );
+
+    final response = await _client.get(
+      uri,
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    return StudentListReport.fromJson(payload);
+  }
+
+  Future<WeeklyIncidentReport> weeklyIncidentReport({
+    required String token,
+    int? levelId,
+    int? classId,
+  }) async {
+    final queryParameters = <String, String>{};
+
+    if (levelId != null) {
+      queryParameters['level_id'] = '$levelId';
+    }
+
+    if (classId != null) {
+      queryParameters['class_id'] = '$classId';
+    }
+
+    final uri =
+        Uri.parse('$baseUrl/school/students/discipline-incidents/weekly-report')
+            .replace(
+                queryParameters:
+                    queryParameters.isEmpty ? null : queryParameters);
+
+    final response = await _client.get(
+      uri,
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    return WeeklyIncidentReport.fromJson(payload);
+  }
+
+  Future<StudentAcademicAssignment> createStudentAssignment({
+    required String token,
+    required Map<String, dynamic> payload,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$baseUrl/school/student-academic-years'),
+      headers: _headers(token: token, jsonRequest: true),
+      body: jsonEncode(payload),
+    );
+
+    final body = _decode(response);
+    _throwIfNeeded(response, body);
+
+    return StudentAcademicAssignment.fromDynamic(body) ??
+        StudentAcademicAssignment(
+          id: _toInt(body['id']),
+          academicYearId: _toNullableInt(body['academic_year_id']),
+          levelId: _toNullableInt(body['level_id']),
+          classId: _toNullableInt(body['school_class_id']),
+          rollNumber: _toNullableString(body['roll_number']),
+          status: _toNullableString(body['status']),
+          levelName: null,
+          className: null,
+        );
+  }
+
+  Future<void> updateStudentAssignment({
+    required String token,
+    required int assignmentId,
+    required Map<String, dynamic> payload,
+  }) async {
+    final response = await _client.put(
+      Uri.parse('$baseUrl/school/student-academic-years/$assignmentId'),
+      headers: _headers(token: token, jsonRequest: true),
+      body: jsonEncode(payload),
+    );
+
+    final body = _decode(response);
+    _throwIfNeeded(response, body);
+  }
+
+  Future<StudentOptionalFeesResponse> studentOptionalFees({
+    required String token,
+    required int assignmentId,
+  }) async {
+    final response = await _client.get(
+      Uri.parse(
+          '$baseUrl/school/student-academic-years/$assignmentId/optional-fees'),
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    return StudentOptionalFeesResponse.fromJson(payload);
+  }
+
+  Future<void> syncStudentOptionalFees({
+    required String token,
+    required int assignmentId,
+    required List<int> feeIds,
+  }) async {
+    final response = await _client.put(
+      Uri.parse(
+          '$baseUrl/school/student-academic-years/$assignmentId/optional-fees'),
+      headers: _headers(token: token, jsonRequest: true),
+      body: jsonEncode({'fee_structure_ids': feeIds}),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+  }
+
+  Future<StudentImportResult> uploadStudents({
+    required String token,
+    required String filePath,
+  }) async {
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse('$baseUrl/school/students/import'),
+    );
+    request.headers.addAll(_headers(token: token));
+    request.files.add(await http.MultipartFile.fromPath('file', filePath));
+
+    final streamed = await _client.send(request);
+    final response = await http.Response.fromStream(streamed);
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    return StudentImportResult.fromJson(payload);
   }
 
   Future<List<ExamTermOption>> terms({
@@ -903,6 +1239,35 @@ class LaravelApi {
     }
 
     return null;
+  }
+
+  int _toInt(dynamic value) {
+    if (value is int) {
+      return value;
+    }
+
+    if (value is double) {
+      return value.round();
+    }
+
+    return int.tryParse('$value') ?? 0;
+  }
+
+  int? _toNullableInt(dynamic value) {
+    if (value == null) {
+      return null;
+    }
+
+    return int.tryParse('$value');
+  }
+
+  String? _toNullableString(dynamic value) {
+    final normalized = '${value ?? ''}'.trim();
+    if (normalized.isEmpty) {
+      return null;
+    }
+
+    return normalized;
   }
 }
 

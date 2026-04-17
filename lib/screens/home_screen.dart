@@ -12,8 +12,14 @@ import 'fee_invoices_screen.dart';
 import 'fee_payments_screen.dart';
 import 'fee_structures_screen.dart';
 import 'main_attendance_screen.dart';
+import 'student_incident_report_screen.dart';
+import 'student_list_report_screen.dart';
 import 'student_list_screen.dart';
+import 'students_disabled_screen.dart';
+import 'students_graduates_screen.dart';
+import 'students_upload_screen.dart';
 import 'subject_attendance_screen.dart';
+import 'weekly_incident_report_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({
@@ -187,6 +193,71 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
       ),
+      _SidebarChildLink(
+        label: 'Disabled Students',
+        icon: Icons.block_outlined,
+        onPressed: () => _openScreen(
+          StudentsDisabledScreen(
+            api: widget.api,
+            token: widget.session.token,
+            session: widget.session,
+          ),
+        ),
+      ),
+      _SidebarChildLink(
+        label: 'Graduates',
+        icon: Icons.school_outlined,
+        onPressed: () => _openScreen(
+          StudentsGraduatesScreen(
+            api: widget.api,
+            token: widget.session.token,
+            session: widget.session,
+          ),
+        ),
+      ),
+      if (widget.session.hasPermission('students.create'))
+        _SidebarChildLink(
+          label: 'Upload Students',
+          icon: Icons.upload_file,
+          onPressed: () => _openScreen(
+            StudentsUploadScreen(
+              api: widget.api,
+              token: widget.session.token,
+            ),
+          ),
+        ),
+      _SidebarChildLink(
+        label: 'Student List Report',
+        icon: Icons.description_outlined,
+        onPressed: () => _openScreen(
+          StudentListReportScreen(
+            api: widget.api,
+            token: widget.session.token,
+          ),
+        ),
+      ),
+      if (widget.session.hasPermission('discipline_incidents.report.view'))
+        _SidebarChildLink(
+          label: 'Student Incident Report',
+          icon: Icons.report_outlined,
+          onPressed: () => _openScreen(
+            StudentIncidentReportScreen(
+              api: widget.api,
+              token: widget.session.token,
+            ),
+          ),
+        ),
+      if (widget.session.hasPermission('discipline_incidents.report.view'))
+        _SidebarChildLink(
+          label: 'Weekly Incident Report',
+          icon: Icons.calendar_month_outlined,
+          onPressed: () => _openScreen(
+            WeeklyIncidentReportScreen(
+              api: widget.api,
+              token: widget.session.token,
+            ),
+          ),
+        ),
     ];
   }
 
