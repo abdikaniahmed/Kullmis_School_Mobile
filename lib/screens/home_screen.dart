@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../models/auth_session.dart';
@@ -36,6 +37,8 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
+  Widget? _windowContent;
+  String? _windowTitle;
 
   bool get _canTakeMainAttendance => widget.session.hasAnyPermission(const [
         'attendance.view',
@@ -73,61 +76,325 @@ class _HomeScreenState extends State<HomeScreen> {
   bool get _canPayFees => widget.session.hasPermission('fees.pay');
 
   List<_ShellDestination> _destinations() {
-    final destinations = <_ShellDestination>[
+    return <_ShellDestination>[
       _ShellDestination(
         label: 'Dashboard',
         icon: Icons.dashboard_outlined,
         selectedIcon: Icons.dashboard,
         builder: _buildDashboardPage,
+        showChildren: true,
+        sidebarChildren: _dashboardSidebarLinks(),
+      ),
+      _ShellDestination(
+        label: 'Student',
+        icon: Icons.groups_outlined,
+        selectedIcon: Icons.groups,
+        builder: _buildStudentsPage,
+        showChildren: true,
+        sidebarChildren: _studentSidebarLinks(),
+      ),
+      _ShellDestination(
+        label: 'Reports',
+        icon: Icons.bar_chart_outlined,
+        selectedIcon: Icons.bar_chart,
+        builder: _buildReportsPage,
+        showChildren: true,
+        sidebarChildren: _reportsSidebarLinks(),
+      ),
+      _ShellDestination(
+        label: 'Attendance',
+        icon: Icons.how_to_reg_outlined,
+        selectedIcon: Icons.how_to_reg,
+        builder: _buildAttendancePage,
+        showChildren: true,
+        sidebarChildren: _attendanceSidebarLinks(),
+      ),
+      _ShellDestination(
+        label: 'Subject Attendance',
+        icon: Icons.fact_check_outlined,
+        selectedIcon: Icons.fact_check,
+        builder: _buildSubjectAttendancePage,
+        showChildren: true,
+        sidebarChildren: _subjectAttendanceSidebarLinks(),
+      ),
+      _ShellDestination(
+        label: 'Exams',
+        icon: Icons.school_outlined,
+        selectedIcon: Icons.school,
+        builder: _buildExamsPage,
+        showChildren: true,
+        sidebarChildren: _examsSidebarLinks(),
+      ),
+      _ShellDestination(
+        label: 'Finance',
+        icon: Icons.request_quote_outlined,
+        selectedIcon: Icons.request_quote,
+        builder: _buildFeesPage,
+        showChildren: true,
+        sidebarChildren: _financeSidebarLinks(),
+      ),
+      _ShellDestination(
+        label: 'HR',
+        icon: Icons.badge_outlined,
+        selectedIcon: Icons.badge,
+        builder: _buildHrPage,
+        showChildren: true,
+        sidebarChildren: _hrSidebarLinks(),
+      ),
+      _ShellDestination(
+        label: 'Academic',
+        icon: Icons.auto_stories_outlined,
+        selectedIcon: Icons.auto_stories,
+        builder: _buildAcademicPage,
+        showChildren: true,
+        sidebarChildren: _academicSidebarLinks(),
+      ),
+      _ShellDestination(
+        label: 'Settings',
+        icon: Icons.settings_outlined,
+        selectedIcon: Icons.settings,
+        builder: _buildSettingsPage,
+        showChildren: true,
+        sidebarChildren: _settingsSidebarLinks(),
+      ),
+    ];
+  }
+
+  List<_SidebarChildLink> _dashboardSidebarLinks() {
+    return <_SidebarChildLink>[
+      _SidebarChildLink(
+        label: 'Refresh Dashboard',
+        icon: Icons.refresh,
+        onPressed: widget.onRefresh,
+      ),
+    ];
+  }
+
+  List<_SidebarChildLink> _studentSidebarLinks() {
+    if (!_canViewStudents) {
+      return const [];
+    }
+
+    return <_SidebarChildLink>[
+      _SidebarChildLink(
+        label: 'Student List',
+        icon: Icons.groups_outlined,
+        onPressed: () => _openScreen(
+          StudentListScreen(
+            api: widget.api,
+            token: widget.session.token,
+            session: widget.session,
+          ),
+        ),
+      ),
+    ];
+  }
+
+  List<_SidebarChildLink> _attendanceSidebarLinks() {
+    final links = <_SidebarChildLink>[];
+
+    if (_canTakeMainAttendance) {
+      links.add(
+        _SidebarChildLink(
+          label: 'Daily Attendance',
+          icon: Icons.how_to_reg_outlined,
+          onPressed: () => _openScreen(
+            MainAttendanceScreen(
+              api: widget.api,
+              token: widget.session.token,
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (_canTakeSubjectAttendance) {
+      links.add(
+        _SidebarChildLink(
+          label: 'Subject Attendance',
+          icon: Icons.fact_check_outlined,
+          onPressed: () => _openScreen(
+            SubjectAttendanceScreen(
+              api: widget.api,
+              token: widget.session.token,
+            ),
+          ),
+        ),
+      );
+    }
+
+    return links;
+  }
+
+  List<_SidebarChildLink> _subjectAttendanceSidebarLinks() {
+    if (!_canTakeSubjectAttendance) {
+      return const [];
+    }
+
+    return <_SidebarChildLink>[
+      _SidebarChildLink(
+        label: 'Record Attendance',
+        icon: Icons.fact_check_outlined,
+        onPressed: () => _openScreen(
+          SubjectAttendanceScreen(
+            api: widget.api,
+            token: widget.session.token,
+          ),
+        ),
+      ),
+    ];
+  }
+
+  List<_SidebarChildLink> _reportsSidebarLinks() {
+    if (!_canViewExamReports) {
+      return const [];
+    }
+
+    return <_SidebarChildLink>[
+      _SidebarChildLink(
+        label: 'Exam Reports',
+        icon: Icons.assessment_outlined,
+        onPressed: () => _openScreen(
+          ExamReportScreen(
+            api: widget.api,
+            token: widget.session.token,
+          ),
+        ),
+      ),
+    ];
+  }
+
+  List<_SidebarChildLink> _examsSidebarLinks() {
+    final links = <_SidebarChildLink>[];
+
+    if (_canEnterExamMarks) {
+      links.add(
+        _SidebarChildLink(
+          label: 'Exam Mark Entry',
+          icon: Icons.edit_note_outlined,
+          onPressed: () => _openScreen(
+            ExamMarkEntryScreen(
+              api: widget.api,
+              token: widget.session.token,
+              canViewMarks: widget.session.hasPermission('marks.view'),
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (_canViewExamReports) {
+      links.add(
+        _SidebarChildLink(
+          label: 'Exam Reports',
+          icon: Icons.assessment_outlined,
+          onPressed: () => _openScreen(
+            ExamReportScreen(
+              api: widget.api,
+              token: widget.session.token,
+            ),
+          ),
+        ),
+      );
+    }
+
+    return links;
+  }
+
+  List<_SidebarChildLink> _financeSidebarLinks() {
+    final links = <_SidebarChildLink>[
+      _SidebarChildLink(
+        label: 'Fee Structures',
+        icon: Icons.request_quote_outlined,
+        onPressed: () => _openScreen(
+          FeeStructuresScreen(
+            api: widget.api,
+            token: widget.session.token,
+          ),
+        ),
+      ),
+      _SidebarChildLink(
+        label: 'Fee Invoices',
+        icon: Icons.receipt_long_outlined,
+        onPressed: () => _openScreen(
+          FeeInvoicesScreen(
+            api: widget.api,
+            token: widget.session.token,
+            session: widget.session,
+          ),
+        ),
       ),
     ];
 
-    if (_canViewStudents) {
-      destinations.add(
-        _ShellDestination(
-          label: 'Students',
-          icon: Icons.groups_outlined,
-          selectedIcon: Icons.groups,
-          builder: _buildStudentsPage,
+    if (_canPayFees) {
+      links.add(
+        _SidebarChildLink(
+          label: 'Fee Payments',
+          icon: Icons.payments_outlined,
+          onPressed: () => _openScreen(
+            FeePaymentsScreen(
+              api: widget.api,
+              token: widget.session.token,
+              session: widget.session,
+            ),
+          ),
         ),
       );
     }
 
-    if (_canTakeMainAttendance || _canTakeSubjectAttendance) {
-      destinations.add(
-        _ShellDestination(
-          label: 'Attendance',
-          icon: Icons.how_to_reg_outlined,
-          selectedIcon: Icons.how_to_reg,
-          builder: _buildAttendancePage,
-        ),
-      );
-    }
-
-    if (_canViewFees) {
-      destinations.add(
-        _ShellDestination(
-          label: 'Fees',
-          icon: Icons.request_quote_outlined,
-          selectedIcon: Icons.request_quote,
-          builder: _buildFeesPage,
-        ),
-      );
-    }
-
-    destinations.add(
-      _ShellDestination(
-        label: 'More',
-        icon: Icons.grid_view_outlined,
-        selectedIcon: Icons.grid_view,
-        builder: _buildMorePage,
-      ),
-    );
-
-    return destinations;
+    return links;
   }
 
-  Future<void> _openScreen(Widget screen) {
+  List<_SidebarChildLink> _hrSidebarLinks() {
+    if (!_canViewDisciplineIncidents) {
+      return const [];
+    }
+
+    return <_SidebarChildLink>[
+      _SidebarChildLink(
+        label: 'Discipline Incidents',
+        icon: Icons.report_problem_outlined,
+        onPressed: () => _openScreen(
+          DisciplineIncidentsScreen(
+            api: widget.api,
+            token: widget.session.token,
+            session: widget.session,
+          ),
+        ),
+      ),
+    ];
+  }
+
+  List<_SidebarChildLink> _academicSidebarLinks() {
+    return const [];
+  }
+
+  List<_SidebarChildLink> _settingsSidebarLinks() {
+    return <_SidebarChildLink>[
+      _SidebarChildLink(
+        label: 'Refresh Dashboard',
+        icon: Icons.refresh,
+        onPressed: widget.onRefresh,
+      ),
+      _SidebarChildLink(
+        label: 'Sign Out',
+        icon: Icons.logout,
+        onPressed: widget.onLogout,
+      ),
+    ];
+  }
+
+  Future<void> _openScreen(Widget screen, {String? title}) {
+    final isWindows = defaultTargetPlatform == TargetPlatform.windows;
+
+    if (isWindows) {
+      setState(() {
+        _windowContent = screen;
+        _windowTitle = title;
+      });
+      return Future.value();
+    }
+
     return Navigator.of(context).push(
       MaterialPageRoute<void>(builder: (_) => screen),
     );
@@ -274,215 +541,105 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildStudentsPage() {
-    return _buildSectionPage(
+    return _buildOverviewPage(
       title: 'Students',
       description:
           'Open the student roster and drill into profiles from one place.',
-      actions: [
-        _SectionAction(
-          title: 'Student List',
-          description: 'Browse students by level and class.',
-          icon: Icons.groups_outlined,
-          onPressed: () => _openScreen(
-            StudentListScreen(
-              api: widget.api,
-              token: widget.session.token,
-              session: widget.session,
-            ),
-          ),
-        ),
-      ],
+      modules: _studentSidebarLinks().map((link) => link.label).toList(),
     );
   }
 
   Widget _buildAttendancePage() {
-    final actions = <_SectionAction>[];
-
-    if (_canTakeMainAttendance) {
-      actions.add(
-        _SectionAction(
-          title: 'Daily Attendance',
-          description: 'Take and update whole-class attendance by shift.',
-          icon: Icons.how_to_reg_outlined,
-          onPressed: () => _openScreen(
-            MainAttendanceScreen(
-              api: widget.api,
-              token: widget.session.token,
-            ),
-          ),
-        ),
-      );
-    }
-
-    if (_canTakeSubjectAttendance) {
-      actions.add(
-        _SectionAction(
-          title: 'Subject Attendance',
-          description: 'Record attendance for a subject period.',
-          icon: Icons.fact_check_outlined,
-          onPressed: () => _openScreen(
-            SubjectAttendanceScreen(
-              api: widget.api,
-              token: widget.session.token,
-            ),
-          ),
-        ),
-      );
-    }
-
-    return _buildSectionPage(
+    return _buildOverviewPage(
       title: 'Attendance',
       description: 'Open the attendance tools that match the signed-in role.',
-      actions: actions,
+      modules: _attendanceSidebarLinks().map((link) => link.label).toList(),
+    );
+  }
+
+  Widget _buildSubjectAttendancePage() {
+    return _buildOverviewPage(
+      title: 'Subject Attendance',
+      description: 'Track attendance for subjects and periods.',
+      modules:
+          _subjectAttendanceSidebarLinks().map((link) => link.label).toList(),
+    );
+  }
+
+  Widget _buildReportsPage() {
+    return _buildOverviewPage(
+      title: 'Reports',
+      description: 'Open exam reports and summaries.',
+      modules: _reportsSidebarLinks().map((link) => link.label).toList(),
+    );
+  }
+
+  Widget _buildExamsPage() {
+    return _buildOverviewPage(
+      title: 'Exams',
+      description: 'Manage exams, marks, and reports.',
+      modules: _examsSidebarLinks().map((link) => link.label).toList(),
+    );
+  }
+
+  Widget _buildHrPage() {
+    return _buildOverviewPage(
+      title: 'HR',
+      description: 'View HR related records and reports.',
+      modules: _hrSidebarLinks().map((link) => link.label).toList(),
+    );
+  }
+
+  Widget _buildAcademicPage() {
+    return _buildOverviewPage(
+      title: 'Academic',
+      description: 'Academic tools and planning modules.',
+      modules: _academicSidebarLinks().map((link) => link.label).toList(),
+      emptyMessage:
+          'Academic tools will appear here once they are enabled for your role.',
     );
   }
 
   Widget _buildFeesPage() {
-    final actions = <_SectionAction>[
-      _SectionAction(
-        title: 'Fee Structures',
-        description: 'Review fee setup for the active academic year.',
-        icon: Icons.request_quote_outlined,
-        onPressed: () => _openScreen(
-          FeeStructuresScreen(
-            api: widget.api,
-            token: widget.session.token,
-          ),
-        ),
-      ),
-      _SectionAction(
-        title: 'Fee Invoices',
-        description: 'Filter invoices and generate new billing runs.',
-        icon: Icons.receipt_long_outlined,
-        onPressed: () => _openScreen(
-          FeeInvoicesScreen(
-            api: widget.api,
-            token: widget.session.token,
-            session: widget.session,
-          ),
-        ),
-      ),
-    ];
-
-    if (_canPayFees) {
-      actions.add(
-        _SectionAction(
-          title: 'Fee Payments',
-          description: 'Capture and review invoice payments.',
-          icon: Icons.payments_outlined,
-          onPressed: () => _openScreen(
-            FeePaymentsScreen(
-              api: widget.api,
-              token: widget.session.token,
-              session: widget.session,
-            ),
-          ),
-        ),
-      );
-    }
-
-    return _buildSectionPage(
+    return _buildOverviewPage(
       title: 'Fees',
       description: 'Manage school billing, invoices, and payment workflows.',
-      actions: actions,
+      modules: _financeSidebarLinks().map((link) => link.label).toList(),
     );
   }
 
-  Widget _buildMorePage() {
-    final theme = Theme.of(context);
-    final actions = <_SectionAction>[];
-
-    if (_canEnterExamMarks) {
-      actions.add(
-        _SectionAction(
-          title: 'Exam Mark Entry',
-          description: 'Enter marks for the selected exam and subject.',
-          icon: Icons.edit_note_outlined,
-          onPressed: () => _openScreen(
-            ExamMarkEntryScreen(
-              api: widget.api,
-              token: widget.session.token,
-              canViewMarks: widget.session.hasPermission('marks.view'),
-            ),
-          ),
-        ),
-      );
-    }
-
-    if (_canViewExamReports) {
-      actions.add(
-        _SectionAction(
-          title: 'Exam Reports',
-          description: 'Review published report card and exam outcomes.',
-          icon: Icons.assessment_outlined,
-          onPressed: () => _openScreen(
-            ExamReportScreen(
-              api: widget.api,
-              token: widget.session.token,
-            ),
-          ),
-        ),
-      );
-    }
-
-    if (_canViewDisciplineIncidents) {
-      actions.add(
-        _SectionAction(
-          title: 'Discipline Incidents',
-          description: 'Track and review student incident records.',
-          icon: Icons.report_problem_outlined,
-          onPressed: () => _openScreen(
-            DisciplineIncidentsScreen(
-              api: widget.api,
-              token: widget.session.token,
-              session: widget.session,
-            ),
-          ),
-        ),
-      );
-    }
-
-    actions.addAll([
-      _SectionAction(
-        title: 'Refresh Dashboard',
-        description: 'Reload the latest dashboard and session data.',
-        icon: Icons.refresh,
-        onPressed: widget.onRefresh,
-      ),
-      _SectionAction(
-        title: 'Sign Out',
-        description: 'Clear the current token and return to login.',
-        icon: Icons.logout,
-        onPressed: widget.onLogout,
-      ),
-    ]);
-
-    return _buildSectionPage(
-      title: 'More',
-      description: 'Open the extra school tools and account actions.',
-      actions: actions,
+  Widget _buildSettingsPage() {
+    return _buildOverviewPage(
+      title: 'Settings',
+      description: 'Account actions and system utilities.',
+      modules: _settingsSidebarLinks().map((link) => link.label).toList(),
       footer: _buildPanel(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Signed in as', style: theme.textTheme.titleLarge),
+            Text('Signed in as', style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 8),
-            Text(widget.session.name, style: theme.textTheme.bodyLarge),
+            Text(widget.session.name,
+                style: Theme.of(context).textTheme.bodyLarge),
             const SizedBox(height: 4),
-            Text(widget.session.email, style: theme.textTheme.bodyMedium),
+            Text(widget.session.email,
+                style: Theme.of(context).textTheme.bodyMedium),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildSectionPage({
+  Widget _buildOverviewPage({
     required String title,
     required String description,
-    required List<_SectionAction> actions,
+    required List<String> modules,
+    String? emptyMessage,
     Widget? footer,
   }) {
     final theme = Theme.of(context);
+    final activeMessage =
+        emptyMessage ?? 'Use the sidebar sub-links to open a module.';
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
@@ -497,24 +654,47 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
         ),
-        if (actions.isNotEmpty) ...[
-          const SizedBox(height: 16),
-          Wrap(
-            spacing: 16,
-            runSpacing: 16,
-            children: actions
-                .map((action) => _SectionActionCard(action: action))
-                .toList(),
+        const SizedBox(height: 16),
+        _buildPanel(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Overview', style: theme.textTheme.titleLarge),
+              const SizedBox(height: 8),
+              Text(
+                'Modules available: ${modules.length}',
+                style: theme.textTheme.bodyMedium,
+              ),
+              const SizedBox(height: 12),
+              if (modules.isNotEmpty)
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: modules
+                      .map(
+                        (label) => Chip(
+                          label: Text(label),
+                          backgroundColor:
+                              theme.colorScheme.primary.withOpacity(0.08),
+                          labelStyle: TextStyle(
+                            color: theme.colorScheme.primary,
+                          ),
+                        ),
+                      )
+                      .toList(),
+                )
+              else
+                Text(activeMessage, style: theme.textTheme.bodyLarge),
+              if (modules.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                  'Open a module using the sidebar sub-links.',
+                  style: theme.textTheme.bodyMedium,
+                ),
+              ],
+            ],
           ),
-        ] else ...[
-          const SizedBox(height: 16),
-          _buildPanel(
-            child: Text(
-              'No tools are available for this section with the current role.',
-              style: theme.textTheme.bodyLarge,
-            ),
-          ),
-        ],
+        ),
         if (footer != null) ...[
           const SizedBox(height: 16),
           footer,
@@ -540,6 +720,47 @@ class _HomeScreenState extends State<HomeScreen> {
     final destinations = _destinations();
     final selectedIndex = _selectedIndex.clamp(0, destinations.length - 1);
     final selectedDestination = destinations[selectedIndex];
+    final isWindows = defaultTargetPlatform == TargetPlatform.windows;
+
+    if (isWindows) {
+      return Scaffold(
+        body: Row(
+          children: [
+            _Sidebar(
+              schoolName: widget.session.schoolName ?? 'Kullmis School',
+              destinations: destinations,
+              selectedIndex: selectedIndex,
+              onDestinationSelected: (index) {
+                setState(() {
+                  _selectedIndex = index;
+                  _windowContent = null;
+                  _windowTitle = null;
+                });
+              },
+            ),
+            Expanded(
+              child: Column(
+                children: [
+                  _TopBar(
+                    title: _windowTitle ?? selectedDestination.label,
+                    userName: widget.session.name,
+                    userEmail: widget.session.email,
+                    onRefresh: widget.onRefresh,
+                    onLogout: widget.onLogout,
+                  ),
+                  Expanded(
+                    child: ColoredBox(
+                      color: theme.scaffoldBackgroundColor,
+                      child: _windowContent ?? selectedDestination.builder(),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -646,18 +867,311 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
+class _Sidebar extends StatelessWidget {
+  const _Sidebar({
+    required this.schoolName,
+    required this.destinations,
+    required this.selectedIndex,
+    required this.onDestinationSelected,
+  });
+
+  final String schoolName;
+  final List<_ShellDestination> destinations;
+  final int selectedIndex;
+  final ValueChanged<int> onDestinationSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Container(
+      width: 250,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(
+          right: BorderSide(color: Colors.black.withOpacity(0.08)),
+        ),
+      ),
+      child: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 18,
+                    backgroundColor:
+                        theme.colorScheme.primary.withOpacity(0.12),
+                    child: Icon(
+                      Icons.school_outlined,
+                      color: theme.colorScheme.primary,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      schoolName,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleLarge,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: ListView.builder(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                itemCount: destinations.length,
+                itemBuilder: (context, index) {
+                  final destination = destinations[index];
+                  final selected = index == selectedIndex;
+                  final showChildren = destination.showChildren &&
+                      destination.sidebarChildren.isNotEmpty;
+
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _SidebarTile(
+                        label: destination.label,
+                        icon: selected
+                            ? destination.selectedIcon
+                            : destination.icon,
+                        selected: selected,
+                        onTap: () => onDestinationSelected(index),
+                      ),
+                      if (showChildren && selected)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 12, bottom: 6),
+                          child: Column(
+                            children: destination.sidebarChildren
+                                .map(
+                                  (child) => _SidebarSubTile(
+                                    label: child.label,
+                                    icon: child.icon,
+                                    onTap: child.onPressed,
+                                  ),
+                                )
+                                .toList(),
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+              child: Text(
+                'Kullmis School System',
+                style: theme.textTheme.bodyMedium,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SidebarTile extends StatelessWidget {
+  const _SidebarTile({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Material(
+        color: selected
+            ? theme.colorScheme.primary.withOpacity(0.1)
+            : Colors.transparent,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            child: Row(
+              children: [
+                Icon(
+                  icon,
+                  color: selected
+                      ? theme.colorScheme.primary
+                      : theme.colorScheme.onSurface.withOpacity(0.7),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    label,
+                    style: theme.textTheme.bodyLarge?.copyWith(
+                      color: selected
+                          ? theme.colorScheme.primary
+                          : theme.colorScheme.onSurface,
+                      fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SidebarSubTile extends StatelessWidget {
+  const _SidebarSubTile({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final Future<void> Function() onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          onTap: () async => onTap(),
+          borderRadius: BorderRadius.circular(14),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: Row(
+              children: [
+                Icon(
+                  icon,
+                  size: 18,
+                  color: theme.colorScheme.onSurface.withOpacity(0.6),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    label,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurface.withOpacity(0.85),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TopBar extends StatelessWidget {
+  const _TopBar({
+    required this.title,
+    required this.userName,
+    required this.userEmail,
+    required this.onRefresh,
+    required this.onLogout,
+  });
+
+  final String title;
+  final String userName;
+  final String userEmail;
+  final Future<void> Function() onRefresh;
+  final Future<void> Function() onLogout;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Container(
+      height: 64,
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(
+          bottom: BorderSide(color: Colors.black.withOpacity(0.08)),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.dashboard_customize_outlined,
+              color: theme.colorScheme.primary),
+          const SizedBox(width: 12),
+          Text(title, style: theme.textTheme.titleLarge),
+          const Spacer(),
+          Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(userName, style: theme.textTheme.bodyLarge),
+              Text(userEmail, style: theme.textTheme.bodyMedium),
+            ],
+          ),
+          const SizedBox(width: 16),
+          IconButton(
+            onPressed: () async => onRefresh(),
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Refresh',
+          ),
+          TextButton.icon(
+            onPressed: () async => onLogout(),
+            icon: const Icon(Icons.logout),
+            label: const Text('Logout'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _ShellDestination {
   const _ShellDestination({
     required this.label,
     required this.icon,
     required this.selectedIcon,
     required this.builder,
+    this.sidebarChildren = const [],
+    this.showChildren = false,
   });
 
   final String label;
   final IconData icon;
   final IconData selectedIcon;
   final Widget Function() builder;
+  final List<_SidebarChildLink> sidebarChildren;
+  final bool showChildren;
+}
+
+class _SidebarChildLink {
+  const _SidebarChildLink({
+    required this.label,
+    required this.icon,
+    required this.onPressed,
+  });
+
+  final String label;
+  final IconData icon;
+  final Future<void> Function() onPressed;
 }
 
 class _SectionAction {
