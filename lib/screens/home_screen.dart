@@ -5,13 +5,17 @@ import '../models/auth_session.dart';
 import '../models/dashboard_data.dart';
 import '../services/laravel_api.dart';
 import '../widgets/summary_card.dart';
+import 'academic_years_screen.dart';
+import 'classes_screen.dart';
 import 'discipline_incidents_screen.dart';
 import 'exam_mark_entry_screen.dart';
 import 'exam_report_screen.dart';
 import 'fee_invoices_screen.dart';
 import 'fee_payments_screen.dart';
 import 'fee_structures_screen.dart';
+import 'levels_screen.dart';
 import 'main_attendance_screen.dart';
+import 'promotions_screen.dart';
 import 'student_incident_report_screen.dart';
 import 'student_list_report_screen.dart';
 import 'student_list_screen.dart';
@@ -19,6 +23,8 @@ import 'students_disabled_screen.dart';
 import 'students_graduates_screen.dart';
 import 'students_upload_screen.dart';
 import 'subject_attendance_screen.dart';
+import 'subjects_screen.dart';
+import 'terms_screen.dart';
 import 'weekly_incident_report_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -75,6 +81,21 @@ class _HomeScreenState extends State<HomeScreen> {
   bool get _canViewExamReports => widget.session.hasPermission('marks.view');
 
   bool get _canPayFees => widget.session.hasPermission('fees.pay');
+
+  bool get _canViewAcademicYears =>
+      widget.session.hasPermission('academic_years.view');
+
+  bool get _canViewPromotions => widget.session.roles.any(
+        (role) => role.toLowerCase() == 'school_admin',
+      );
+
+  bool get _canViewTerms => widget.session.hasPermission('terms.view');
+
+  bool get _canViewSubjects => widget.session.hasPermission('subjects.view');
+
+  bool get _canViewLevels => widget.session.hasPermission('levels.view');
+
+  bool get _canViewClasses => widget.session.hasPermission('classes.view');
 
   List<_ShellDestination> _destinations() {
     return <_ShellDestination>[
@@ -432,7 +453,105 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   List<_SidebarChildLink> _academicSidebarLinks() {
-    return const [];
+    final links = <_SidebarChildLink>[];
+
+    if (_canViewAcademicYears) {
+      links.add(
+        _SidebarChildLink(
+          label: 'Academic Years',
+          icon: Icons.calendar_month_outlined,
+          onPressed: () => _openScreen(
+            AcademicYearsScreen(
+              api: widget.api,
+              token: widget.session.token,
+              session: widget.session,
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (_canViewPromotions) {
+      links.add(
+        _SidebarChildLink(
+          label: 'Promotions',
+          icon: Icons.trending_up,
+          onPressed: () => _openScreen(
+            PromotionsScreen(
+              api: widget.api,
+              token: widget.session.token,
+              session: widget.session,
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (_canViewTerms) {
+      links.add(
+        _SidebarChildLink(
+          label: 'Terms',
+          icon: Icons.calendar_today_outlined,
+          onPressed: () => _openScreen(
+            TermsScreen(
+              api: widget.api,
+              token: widget.session.token,
+              session: widget.session,
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (_canViewSubjects) {
+      links.add(
+        _SidebarChildLink(
+          label: 'Subjects',
+          icon: Icons.menu_book_outlined,
+          onPressed: () => _openScreen(
+            SubjectsScreen(
+              api: widget.api,
+              token: widget.session.token,
+              session: widget.session,
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (_canViewLevels) {
+      links.add(
+        _SidebarChildLink(
+          label: 'Levels',
+          icon: Icons.layers_outlined,
+          onPressed: () => _openScreen(
+            LevelsScreen(
+              api: widget.api,
+              token: widget.session.token,
+              session: widget.session,
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (_canViewClasses) {
+      links.add(
+        _SidebarChildLink(
+          label: 'Classes',
+          icon: Icons.folder_outlined,
+          onPressed: () => _openScreen(
+            ClassesScreen(
+              api: widget.api,
+              token: widget.session.token,
+              session: widget.session,
+            ),
+          ),
+        ),
+      );
+    }
+
+    return links;
   }
 
   List<_SidebarChildLink> _settingsSidebarLinks() {

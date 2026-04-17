@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
+import '../models/academic_management_models.dart';
 import '../models/auth_session.dart';
 import '../models/discipline_incident_models.dart';
 import '../models/dashboard_data.dart';
@@ -121,6 +122,111 @@ class LaravelApi {
         .toList();
   }
 
+  Future<AcademicYearListPage> academicYearList({
+    required String token,
+    int page = 1,
+    String? search,
+  }) async {
+    final queryParameters = <String, String>{'page': '$page'};
+
+    if (search != null && search.trim().isNotEmpty) {
+      queryParameters['search'] = search.trim();
+    }
+
+    final uri = Uri.parse('$baseUrl/school/academic-years').replace(
+      queryParameters: queryParameters,
+    );
+
+    final response = await _client.get(
+      uri,
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    return AcademicYearListPage.fromJson(payload);
+  }
+
+  Future<AcademicYearListItem> createAcademicYear({
+    required String token,
+    required Map<String, dynamic> payload,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$baseUrl/school/academic-years'),
+      headers: _headers(token: token, jsonRequest: true),
+      body: jsonEncode(payload),
+    );
+
+    final decoded = _decode(response);
+    _throwIfNeeded(response, decoded);
+
+    final yearPayload = decoded['year'];
+    if (yearPayload is Map<String, dynamic>) {
+      return AcademicYearListItem.fromJson(yearPayload);
+    }
+
+    return AcademicYearListItem.fromJson(decoded);
+  }
+
+  Future<AcademicYearListItem> updateAcademicYear({
+    required String token,
+    required int yearId,
+    required Map<String, dynamic> payload,
+  }) async {
+    final response = await _client.put(
+      Uri.parse('$baseUrl/school/academic-years/$yearId'),
+      headers: _headers(token: token, jsonRequest: true),
+      body: jsonEncode(payload),
+    );
+
+    final decoded = _decode(response);
+    _throwIfNeeded(response, decoded);
+
+    return AcademicYearListItem.fromJson(decoded);
+  }
+
+  Future<void> deleteAcademicYear({
+    required String token,
+    required int yearId,
+  }) async {
+    final response = await _client.delete(
+      Uri.parse('$baseUrl/school/academic-years/$yearId'),
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+  }
+
+  Future<void> setActiveAcademicYear({
+    required String token,
+    required int yearId,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$baseUrl/school/academic-years/$yearId/set-active'),
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+  }
+
+  Future<AcademicYearListItem> academicYearDetail({
+    required String token,
+    required int yearId,
+  }) async {
+    final response = await _client.get(
+      Uri.parse('$baseUrl/school/academic-years/$yearId'),
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    return AcademicYearListItem.fromJson(payload);
+  }
+
   Future<List<MainAttendanceLevel>> attendanceLevels(String token) async {
     final response = await _client.get(
       Uri.parse('$baseUrl/school/levels'),
@@ -135,6 +241,107 @@ class LaravelApi {
         .whereType<Map<String, dynamic>>()
         .map(MainAttendanceLevel.fromJson)
         .toList();
+  }
+
+  Future<TermListPage> termsPage({
+    required String token,
+    int page = 1,
+    String? search,
+  }) async {
+    final queryParameters = <String, String>{'page': '$page'};
+
+    if (search != null && search.trim().isNotEmpty) {
+      queryParameters['search'] = search.trim();
+    }
+
+    final uri = Uri.parse('$baseUrl/school/terms').replace(
+      queryParameters: queryParameters,
+    );
+
+    final response = await _client.get(
+      uri,
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    return TermListPage.fromJson(payload);
+  }
+
+  Future<int?> termCreateMeta({
+    required String token,
+  }) async {
+    final response = await _client.get(
+      Uri.parse('$baseUrl/school/terms/create-meta'),
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    return int.tryParse('${payload['active_academic_year_id'] ?? ''}');
+  }
+
+  Future<TermListItem> createTerm({
+    required String token,
+    required Map<String, dynamic> payload,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$baseUrl/school/terms'),
+      headers: _headers(token: token, jsonRequest: true),
+      body: jsonEncode(payload),
+    );
+
+    final decoded = _decode(response);
+    _throwIfNeeded(response, decoded);
+
+    return TermListItem.fromJson(decoded);
+  }
+
+  Future<TermListItem> updateTerm({
+    required String token,
+    required int termId,
+    required Map<String, dynamic> payload,
+  }) async {
+    final response = await _client.put(
+      Uri.parse('$baseUrl/school/terms/$termId'),
+      headers: _headers(token: token, jsonRequest: true),
+      body: jsonEncode(payload),
+    );
+
+    final decoded = _decode(response);
+    _throwIfNeeded(response, decoded);
+
+    return TermListItem.fromJson(decoded);
+  }
+
+  Future<TermListItem> termDetail({
+    required String token,
+    required int termId,
+  }) async {
+    final response = await _client.get(
+      Uri.parse('$baseUrl/school/terms/$termId'),
+      headers: _headers(token: token),
+    );
+
+    final decoded = _decode(response);
+    _throwIfNeeded(response, decoded);
+
+    return TermListItem.fromJson(decoded);
+  }
+
+  Future<void> deleteTerm({
+    required String token,
+    required int termId,
+  }) async {
+    final response = await _client.delete(
+      Uri.parse('$baseUrl/school/terms/$termId'),
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
   }
 
   Future<List<MainAttendanceClass>> attendanceClasses({
@@ -889,6 +1096,339 @@ class LaravelApi {
     }
 
     return results;
+  }
+
+  Future<SubjectListPage> subjectsPage({
+    required String token,
+    int page = 1,
+    String? search,
+  }) async {
+    final queryParameters = <String, String>{'page': '$page'};
+
+    if (search != null && search.trim().isNotEmpty) {
+      queryParameters['search'] = search.trim();
+    }
+
+    final uri = Uri.parse('$baseUrl/school/subjects').replace(
+      queryParameters: queryParameters,
+    );
+
+    final response = await _client.get(
+      uri,
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    return SubjectListPage.fromJson(payload);
+  }
+
+  Future<SubjectListItem> createSubject({
+    required String token,
+    required Map<String, dynamic> payload,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$baseUrl/school/subjects'),
+      headers: _headers(token: token, jsonRequest: true),
+      body: jsonEncode(payload),
+    );
+
+    final decoded = _decode(response);
+    _throwIfNeeded(response, decoded);
+
+    return SubjectListItem.fromJson(decoded);
+  }
+
+  Future<SubjectListItem> updateSubject({
+    required String token,
+    required int subjectId,
+    required Map<String, dynamic> payload,
+  }) async {
+    final response = await _client.put(
+      Uri.parse('$baseUrl/school/subjects/$subjectId'),
+      headers: _headers(token: token, jsonRequest: true),
+      body: jsonEncode(payload),
+    );
+
+    final decoded = _decode(response);
+    _throwIfNeeded(response, decoded);
+
+    return SubjectListItem.fromJson(decoded);
+  }
+
+  Future<SubjectListItem> subjectDetail({
+    required String token,
+    required int subjectId,
+  }) async {
+    final response = await _client.get(
+      Uri.parse('$baseUrl/school/subjects/$subjectId'),
+      headers: _headers(token: token),
+    );
+
+    final decoded = _decode(response);
+    _throwIfNeeded(response, decoded);
+
+    return SubjectListItem.fromJson(decoded);
+  }
+
+  Future<void> deleteSubject({
+    required String token,
+    required int subjectId,
+  }) async {
+    final response = await _client.delete(
+      Uri.parse('$baseUrl/school/subjects/$subjectId'),
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+  }
+
+  Future<LevelListPage> levelsPage({
+    required String token,
+    int page = 1,
+    String? search,
+  }) async {
+    final queryParameters = <String, String>{'page': '$page'};
+
+    if (search != null && search.trim().isNotEmpty) {
+      queryParameters['search'] = search.trim();
+    }
+
+    final uri = Uri.parse('$baseUrl/school/levels').replace(
+      queryParameters: queryParameters,
+    );
+
+    final response = await _client.get(
+      uri,
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    return LevelListPage.fromJson(payload);
+  }
+
+  Future<LevelListItem> levelDetail({
+    required String token,
+    required int levelId,
+  }) async {
+    final response = await _client.get(
+      Uri.parse('$baseUrl/school/levels/$levelId'),
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    return LevelListItem.fromJson(payload);
+  }
+
+  Future<LevelListItem> createLevel({
+    required String token,
+    required Map<String, dynamic> payload,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$baseUrl/school/levels'),
+      headers: _headers(token: token, jsonRequest: true),
+      body: jsonEncode(payload),
+    );
+
+    final payloadJson = _decode(response);
+    _throwIfNeeded(response, payloadJson);
+
+    return LevelListItem.fromJson(payloadJson);
+  }
+
+  Future<LevelListItem> updateLevel({
+    required String token,
+    required int levelId,
+    required Map<String, dynamic> payload,
+  }) async {
+    final response = await _client.put(
+      Uri.parse('$baseUrl/school/levels/$levelId'),
+      headers: _headers(token: token, jsonRequest: true),
+      body: jsonEncode(payload),
+    );
+
+    final payloadJson = _decode(response);
+    _throwIfNeeded(response, payloadJson);
+
+    return LevelListItem.fromJson(payloadJson);
+  }
+
+  Future<void> deleteLevel({
+    required String token,
+    required int levelId,
+  }) async {
+    final response = await _client.delete(
+      Uri.parse('$baseUrl/school/levels/$levelId'),
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+  }
+
+  Future<ClassListPage> classesPage({
+    required String token,
+    int page = 1,
+    String? search,
+  }) async {
+    final queryParameters = <String, String>{'page': '$page'};
+
+    if (search != null && search.trim().isNotEmpty) {
+      queryParameters['search'] = search.trim();
+    }
+
+    final uri = Uri.parse('$baseUrl/school/classes').replace(
+      queryParameters: queryParameters,
+    );
+
+    final response = await _client.get(
+      uri,
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    return ClassListPage.fromJson(payload);
+  }
+
+  Future<ClassListItem> classDetail({
+    required String token,
+    required int classId,
+  }) async {
+    final response = await _client.get(
+      Uri.parse('$baseUrl/school/classes/$classId'),
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    return ClassListItem.fromJson(payload);
+  }
+
+  Future<ClassListItem> createClass({
+    required String token,
+    required Map<String, dynamic> payload,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$baseUrl/school/classes'),
+      headers: _headers(token: token, jsonRequest: true),
+      body: jsonEncode(payload),
+    );
+
+    final payloadJson = _decode(response);
+    _throwIfNeeded(response, payloadJson);
+
+    return ClassListItem.fromJson(payloadJson);
+  }
+
+  Future<ClassListItem> updateClass({
+    required String token,
+    required int classId,
+    required Map<String, dynamic> payload,
+  }) async {
+    final response = await _client.put(
+      Uri.parse('$baseUrl/school/classes/$classId'),
+      headers: _headers(token: token, jsonRequest: true),
+      body: jsonEncode(payload),
+    );
+
+    final payloadJson = _decode(response);
+    _throwIfNeeded(response, payloadJson);
+
+    return ClassListItem.fromJson(payloadJson);
+  }
+
+  Future<void> deleteClass({
+    required String token,
+    required int classId,
+  }) async {
+    final response = await _client.delete(
+      Uri.parse('$baseUrl/school/classes/$classId'),
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+  }
+
+  Future<PromotionOverview> promotionOverview({
+    required String token,
+    int? academicYearId,
+  }) async {
+    final uri = Uri.parse('$baseUrl/school/promotions').replace(
+      queryParameters: academicYearId == null
+          ? null
+          : {'academic_year_id': '$academicYearId'},
+    );
+
+    final response = await _client.get(
+      uri,
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    return PromotionOverview.fromJson(payload);
+  }
+
+  Future<List<PromotionRule>> updatePromotionSettings({
+    required String token,
+    required List<Map<String, dynamic>> rules,
+  }) async {
+    final response = await _client.put(
+      Uri.parse('$baseUrl/school/promotions/settings'),
+      headers: _headers(token: token, jsonRequest: true),
+      body: jsonEncode({'promotion_rules': rules}),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    final rulesPayload = payload['promotion_rules'];
+    if (rulesPayload is List) {
+      return rulesPayload
+          .whereType<Map<String, dynamic>>()
+          .map(PromotionRule.fromJson)
+          .toList();
+    }
+
+    return const [];
+  }
+
+  Future<PromotionSummary> runPromotion({
+    required String token,
+    required int sourceAcademicYearId,
+    required int targetAcademicYearId,
+    bool setTargetActive = true,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$baseUrl/school/promotions/run'),
+      headers: _headers(token: token, jsonRequest: true),
+      body: jsonEncode({
+        'source_academic_year_id': sourceAcademicYearId,
+        'target_academic_year_id': targetAcademicYearId,
+        'set_target_active': setTargetActive,
+      }),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    final summary = payload['summary'];
+    if (summary is Map<String, dynamic>) {
+      return PromotionSummary.fromJson(summary);
+    }
+
+    return PromotionSummary.fromJson(const {});
   }
 
   Future<List<ClassMarkEntry>> classMarks({
