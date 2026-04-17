@@ -66,12 +66,6 @@ class _HomeScreenState extends State<HomeScreen> {
         'discipline_incidents.report.view',
       ]);
 
-  bool get _canViewFees => widget.session.hasAnyPermission(const [
-        'fees.view',
-        'fees.generate',
-        'fees.pay',
-      ]);
-
   bool get _canEnterExamMarks => widget.session.hasAnyPermission(const [
         'marks.create',
         'marks.view',
@@ -1265,58 +1259,4 @@ class _SidebarChildLink {
   final String label;
   final IconData icon;
   final Future<void> Function() onPressed;
-}
-
-class _SectionAction {
-  const _SectionAction({
-    required this.title,
-    required this.description,
-    required this.icon,
-    required this.onPressed,
-  });
-
-  final String title;
-  final String description;
-  final IconData icon;
-  final Future<void> Function() onPressed;
-}
-
-class _SectionActionCard extends StatelessWidget {
-  const _SectionActionCard({required this.action});
-
-  final _SectionAction action;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return SizedBox(
-      width: 280,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(18),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(action.icon, color: theme.colorScheme.primary),
-              const SizedBox(height: 12),
-              Text(action.title, style: theme.textTheme.titleLarge),
-              const SizedBox(height: 8),
-              Text(action.description, style: theme.textTheme.bodyMedium),
-              const SizedBox(height: 16),
-              FilledButton.icon(
-                onPressed: () async => action.onPressed(),
-                icon: const Icon(Icons.arrow_forward),
-                label: const Text('Open'),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 }
