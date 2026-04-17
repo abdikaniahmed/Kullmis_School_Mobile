@@ -43,6 +43,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
+  int? _expandedSidebarIndex;
   Widget? _windowContent;
   String? _windowTitle;
 
@@ -801,11 +802,19 @@ class _HomeScreenState extends State<HomeScreen> {
               schoolName: widget.session.schoolName ?? 'Kullmis School',
               destinations: destinations,
               selectedIndex: selectedIndex,
+              expandedIndex: _expandedSidebarIndex,
               onDestinationSelected: (index) {
                 setState(() {
                   _selectedIndex = index;
                   _windowContent = null;
                   _windowTitle = null;
+                  _expandedSidebarIndex = null;
+                });
+              },
+              onDestinationExpanded: (index) {
+                setState(() {
+                  _expandedSidebarIndex =
+                      _expandedSidebarIndex == index ? null : index;
                 });
               },
             ),
@@ -943,13 +952,17 @@ class _Sidebar extends StatelessWidget {
     required this.schoolName,
     required this.destinations,
     required this.selectedIndex,
+    required this.expandedIndex,
     required this.onDestinationSelected,
+    required this.onDestinationExpanded,
   });
 
   final String schoolName;
   final List<_ShellDestination> destinations;
   final int selectedIndex;
+  final int? expandedIndex;
   final ValueChanged<int> onDestinationSelected;
+  final ValueChanged<int> onDestinationExpanded;
 
   @override
   Widget build(BuildContext context) {
@@ -1000,7 +1013,8 @@ class _Sidebar extends StatelessWidget {
                   final destination = destinations[index];
                   final selected = index == selectedIndex;
                   final showChildren = destination.showChildren &&
-                      destination.sidebarChildren.isNotEmpty;
+                      destination.sidebarChildren.isNotEmpty &&
+                      expandedIndex == index;
 
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1011,9 +1025,17 @@ class _Sidebar extends StatelessWidget {
                             ? destination.selectedIcon
                             : destination.icon,
                         selected: selected,
-                        onTap: () => onDestinationSelected(index),
+                        onTap: () {
+                          if (destination.showChildren &&
+                              destination.sidebarChildren.isNotEmpty) {
+                            onDestinationExpanded(index);
+                            return;
+                          }
+
+                          onDestinationSelected(index);
+                        },
                       ),
-                      if (showChildren && selected)
+                      if (showChildren)
                         Padding(
                           padding: const EdgeInsets.only(left: 12, bottom: 6),
                           child: Column(
