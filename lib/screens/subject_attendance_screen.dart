@@ -340,98 +340,119 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen> {
     final classes = _filteredClasses;
     final periods = filters?.periods ?? const <AttendancePeriod>[];
 
-    return Column(
-      children: [
-        DropdownButtonFormField<int>(
-          value: _selectedLevelId,
-          decoration: const InputDecoration(
-            labelText: 'Level',
-            border: OutlineInputBorder(),
-          ),
-          items: (filters?.levels ?? const <AttendanceLevel>[])
-              .map(
-                (level) => DropdownMenuItem<int>(
-                  value: level.id,
-                  child: Text(level.name),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final fieldWidth = constraints.maxWidth >= 1100
+            ? (constraints.maxWidth - 42) / 4
+            : 260.0;
+
+        return Wrap(
+          spacing: 14,
+          runSpacing: 14,
+          children: [
+            SizedBox(
+              width: fieldWidth,
+              child: DropdownButtonFormField<int>(
+                value: _selectedLevelId,
+                decoration: const InputDecoration(
+                  labelText: 'Level',
+                  border: OutlineInputBorder(),
                 ),
-              )
-              .toList(),
-          onChanged: (value) {
-            setState(() {
-              _selectedLevelId = value;
-              final firstClass =
-                  _filteredClasses.isNotEmpty ? _filteredClasses.first : null;
-              _selectedClassId = firstClass?.id;
-              _clearSession();
-            });
-          },
-        ),
-        const SizedBox(height: 14),
-        DropdownButtonFormField<int>(
-          value: classes.any((entry) => entry.id == _selectedClassId)
-              ? _selectedClassId
-              : null,
-          decoration: const InputDecoration(
-            labelText: 'Class',
-            border: OutlineInputBorder(),
-          ),
-          items: classes
-              .map(
-                (schoolClass) => DropdownMenuItem<int>(
-                  value: schoolClass.id,
-                  child: Text(schoolClass.name),
-                ),
-              )
-              .toList(),
-          onChanged: (value) {
-            setState(() {
-              _selectedClassId = value;
-              _clearSession();
-            });
-          },
-        ),
-        const SizedBox(height: 14),
-        InkWell(
-          onTap: _pickDate,
-          borderRadius: BorderRadius.circular(12),
-          child: InputDecorator(
-            decoration: const InputDecoration(
-              labelText: 'Date',
-              border: OutlineInputBorder(),
+                items: (filters?.levels ?? const <AttendanceLevel>[])
+                    .map(
+                      (level) => DropdownMenuItem<int>(
+                        value: level.id,
+                        child: Text(level.name),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (value) {
+                  setState(() {
+                    _selectedLevelId = value;
+                    final firstClass = _filteredClasses.isNotEmpty
+                        ? _filteredClasses.first
+                        : null;
+                    _selectedClassId = firstClass?.id;
+                    _clearSession();
+                  });
+                },
+              ),
             ),
-            child: Row(
-              children: [
-                Expanded(child: Text(_formatDate(_selectedDate))),
-                const Icon(Icons.calendar_month),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 14),
-        DropdownButtonFormField<int>(
-          value: periods.any((entry) => entry.value == _selectedPeriodNumber)
-              ? _selectedPeriodNumber
-              : null,
-          decoration: const InputDecoration(
-            labelText: 'Period',
-            border: OutlineInputBorder(),
-          ),
-          items: periods
-              .map(
-                (period) => DropdownMenuItem<int>(
-                  value: period.value,
-                  child: Text(period.label),
+            SizedBox(
+              width: fieldWidth,
+              child: DropdownButtonFormField<int>(
+                value: classes.any((entry) => entry.id == _selectedClassId)
+                    ? _selectedClassId
+                    : null,
+                decoration: const InputDecoration(
+                  labelText: 'Class',
+                  border: OutlineInputBorder(),
                 ),
-              )
-              .toList(),
-          onChanged: (value) {
-            setState(() {
-              _selectedPeriodNumber = value;
-              _clearSession();
-            });
-          },
-        ),
-      ],
+                items: classes
+                    .map(
+                      (schoolClass) => DropdownMenuItem<int>(
+                        value: schoolClass.id,
+                        child: Text(schoolClass.name),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (value) {
+                  setState(() {
+                    _selectedClassId = value;
+                    _clearSession();
+                  });
+                },
+              ),
+            ),
+            SizedBox(
+              width: fieldWidth,
+              child: InkWell(
+                onTap: _pickDate,
+                borderRadius: BorderRadius.circular(12),
+                child: InputDecorator(
+                  decoration: const InputDecoration(
+                    labelText: 'Date',
+                    border: OutlineInputBorder(),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(child: Text(_formatDate(_selectedDate))),
+                      const Icon(Icons.calendar_month),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            SizedBox(
+              width: fieldWidth,
+              child: DropdownButtonFormField<int>(
+                value:
+                    periods.any((entry) => entry.value == _selectedPeriodNumber)
+                        ? _selectedPeriodNumber
+                        : null,
+                decoration: const InputDecoration(
+                  labelText: 'Period',
+                  border: OutlineInputBorder(),
+                ),
+                items: periods
+                    .map(
+                      (period) => DropdownMenuItem<int>(
+                        value: period.value,
+                        child: Text(period.label),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (value) {
+                  setState(() {
+                    _selectedPeriodNumber = value;
+                    _clearSession();
+                  });
+                },
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -494,7 +515,7 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen> {
             style: theme.textTheme.bodyMedium,
           ),
           const SizedBox(height: 16),
-          ...session.students.map(_buildStudentTile),
+          _buildStudentTable(theme, session.students),
           const SizedBox(height: 20),
           SizedBox(
             width: double.infinity,
@@ -514,84 +535,129 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen> {
     );
   }
 
-  Widget _buildStudentTile(SubjectAttendanceStudent student) {
+  Widget _buildStudentTable(
+    ThemeData theme,
+    List<SubjectAttendanceStudent> students,
+  ) {
+    return Table(
+      columnWidths: const {
+        0: FixedColumnWidth(55),
+        1: FlexColumnWidth(3),
+        2: FlexColumnWidth(2),
+        3: FlexColumnWidth(3),
+      },
+      border: TableBorder.all(color: const Color(0xFFE2E8F0)),
+      defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+      children: [
+        TableRow(
+          decoration: const BoxDecoration(color: Color(0xFFF8FAFC)),
+          children: [
+            _tableHeaderCell('No.'),
+            _tableHeaderCell('Student Name'),
+            _tableHeaderCell('Status'),
+            _tableHeaderCell('Remarks'),
+          ],
+        ),
+        ...students.asMap().entries.map(
+              (entry) => _buildStudentRow(
+                entry.key + 1,
+                entry.value,
+              ),
+            ),
+      ],
+    );
+  }
+
+  TableRow _buildStudentRow(int index, SubjectAttendanceStudent student) {
     final draft = _drafts[student.id] ??
         _AttendanceDraft(status: student.status, remarks: student.remarks);
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: const Color(0xFFF8FAFC),
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: const Color(0xFFE2E8F0)),
+    return TableRow(
+      children: [
+        _tableCell(Text('$index')),
+        _tableCell(
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(student.name,
+                  style: const TextStyle(fontWeight: FontWeight.w600)),
+              const SizedBox(height: 4),
+              Text(
+                student.rollNumber == null
+                    ? 'No roll number'
+                    : 'Roll No: ${student.rollNumber}',
+                style: const TextStyle(color: Color(0xFF52606D), fontSize: 12),
+              ),
+            ],
+          ),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              student.name,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF1F2933),
-              ),
+        _tableCell(
+          DropdownButtonFormField<String>(
+            value: _statusOptions.contains(draft.status)
+                ? draft.status
+                : 'present',
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              isDense: true,
+              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             ),
-            const SizedBox(height: 4),
-            Text(
-              student.rollNumber == null
-                  ? 'No roll number'
-                  : 'Roll No: ${student.rollNumber}',
-              style: const TextStyle(color: Color(0xFF52606D)),
-            ),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<String>(
-              value: _statusOptions.contains(draft.status)
-                  ? draft.status
-                  : 'present',
-              decoration: const InputDecoration(
-                labelText: 'Status',
-                border: OutlineInputBorder(),
-              ),
-              items: _statusOptions
-                  .map(
-                    (status) => DropdownMenuItem<String>(
-                      value: status,
-                      child: Text(_titleCase(status)),
-                    ),
-                  )
-                  .toList(),
-              onChanged: (value) {
-                if (value == null) {
-                  return;
-                }
+            items: _statusOptions
+                .map(
+                  (status) => DropdownMenuItem<String>(
+                    value: status,
+                    child: Text(_titleCase(status)),
+                  ),
+                )
+                .toList(),
+            onChanged: (value) {
+              if (value == null) {
+                return;
+              }
 
-                setState(() {
-                  _drafts = {
-                    ..._drafts,
-                    student.id: draft.copyWith(status: value),
-                  };
-                });
-              },
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              initialValue: draft.remarks,
-              decoration: const InputDecoration(
-                labelText: 'Remarks',
-                border: OutlineInputBorder(),
-              ),
-              onChanged: (value) {
+              setState(() {
                 _drafts = {
                   ..._drafts,
-                  student.id: draft.copyWith(remarks: value),
+                  student.id: draft.copyWith(status: value),
                 };
-              },
-            ),
-          ],
+              });
+            },
+          ),
         ),
+        _tableCell(
+          TextFormField(
+            key: ValueKey('remarks-${student.id}'),
+            initialValue: draft.remarks,
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              isDense: true,
+              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            ),
+            onChanged: (value) {
+              _drafts = {
+                ..._drafts,
+                student.id: draft.copyWith(remarks: value),
+              };
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _tableHeaderCell(String label) {
+    return Padding(
+      padding: const EdgeInsets.all(10),
+      child: Text(
+        label,
+        style: const TextStyle(fontWeight: FontWeight.w600),
       ),
+    );
+  }
+
+  Widget _tableCell(Widget child) {
+    return Padding(
+      padding: const EdgeInsets.all(10),
+      child: child,
     );
   }
 }
