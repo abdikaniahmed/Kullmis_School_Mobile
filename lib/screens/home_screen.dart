@@ -160,14 +160,6 @@ class _HomeScreenState extends State<HomeScreen> {
         sidebarChildren: _attendanceSidebarLinks(),
       ),
       _ShellDestination(
-        label: 'Subject Attendance',
-        icon: Icons.fact_check_outlined,
-        selectedIcon: Icons.fact_check,
-        builder: _buildSubjectAttendancePage,
-        showChildren: true,
-        sidebarChildren: _subjectAttendanceSidebarLinks(),
-      ),
-      _ShellDestination(
         label: 'Exams',
         icon: Icons.school_outlined,
         selectedIcon: Icons.school,
@@ -339,25 +331,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     return links;
-  }
-
-  List<_SidebarChildLink> _subjectAttendanceSidebarLinks() {
-    if (!_canTakeSubjectAttendance) {
-      return const [];
-    }
-
-    return <_SidebarChildLink>[
-      _SidebarChildLink(
-        label: 'Record Attendance',
-        icon: Icons.fact_check_outlined,
-        onPressed: () => _openScreen(
-          SubjectAttendanceScreen(
-            api: widget.api,
-            token: widget.session.token,
-          ),
-        ),
-      ),
-    ];
   }
 
   List<_SidebarChildLink> _reportsSidebarLinks() {
@@ -890,15 +863,6 @@ class _HomeScreenState extends State<HomeScreen> {
       title: 'Attendance',
       description: 'Open the attendance tools that match the signed-in role.',
       modules: _attendanceSidebarLinks().map((link) => link.label).toList(),
-    );
-  }
-
-  Widget _buildSubjectAttendancePage() {
-    return _buildOverviewPage(
-      title: 'Subject Attendance',
-      description: 'Track attendance for subjects and periods.',
-      modules:
-          _subjectAttendanceSidebarLinks().map((link) => link.label).toList(),
     );
   }
 
