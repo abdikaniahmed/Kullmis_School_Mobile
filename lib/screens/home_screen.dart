@@ -7,8 +7,9 @@ import '../services/laravel_api.dart';
 import '../widgets/summary_card.dart';
 import 'academic_years_screen.dart';
 import 'attendance_settings_screen.dart';
+import 'audit_logs_screen.dart';
 import 'classes_screen.dart';
-import 'discipline_incidents_screen.dart';
+import 'documents_screen.dart';
 import 'exam_mark_entry_screen.dart';
 import 'exam_report_screen.dart';
 import 'fee_invoices_screen.dart';
@@ -19,7 +20,9 @@ import 'grade_setup_screen.dart';
 import 'levels_screen.dart';
 import 'main_attendance_screen.dart';
 import 'promotions_screen.dart';
+import 'roles_screen.dart';
 import 'setup_config_screen.dart';
+import 'staff_screen.dart';
 import 'student_incident_report_screen.dart';
 import 'student_list_report_screen.dart';
 import 'student_list_screen.dart';
@@ -28,7 +31,9 @@ import 'students_graduates_screen.dart';
 import 'students_upload_screen.dart';
 import 'subject_attendance_screen.dart';
 import 'subjects_screen.dart';
+import 'teachers_screen.dart';
 import 'terms_screen.dart';
+import 'users_screen.dart';
 import 'weekly_incident_report_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -107,6 +112,18 @@ class _HomeScreenState extends State<HomeScreen> {
   bool get _canViewLevels => widget.session.hasPermission('levels.view');
 
   bool get _canViewClasses => widget.session.hasPermission('classes.view');
+
+  bool get _canViewStaff => widget.session.hasPermission('staff.view');
+
+  bool get _canViewTeachers => widget.session.hasPermission('teachers.view');
+
+  bool get _canViewDocuments => widget.session.hasPermission('documents.view');
+
+  bool get _canViewUsers => widget.session.hasPermission('users.view');
+
+  bool get _canViewRoles => widget.session.hasPermission('roles.view');
+
+  bool get _canViewAudits => widget.session.hasPermission('users.view');
 
   List<_ShellDestination> _destinations() {
     return <_ShellDestination>[
@@ -444,23 +461,105 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   List<_SidebarChildLink> _hrSidebarLinks() {
-    if (!_canViewDisciplineIncidents) {
-      return const [];
-    }
+    final links = <_SidebarChildLink>[];
 
-    return <_SidebarChildLink>[
-      _SidebarChildLink(
-        label: 'Discipline Incidents',
-        icon: Icons.report_problem_outlined,
-        onPressed: () => _openScreen(
-          DisciplineIncidentsScreen(
-            api: widget.api,
-            token: widget.session.token,
-            session: widget.session,
+    if (_canViewStaff) {
+      links.add(
+        _SidebarChildLink(
+          label: 'Staff',
+          icon: Icons.badge_outlined,
+          onPressed: () => _openScreen(
+            StaffScreen(
+              api: widget.api,
+              token: widget.session.token,
+              session: widget.session,
+            ),
           ),
         ),
-      ),
-    ];
+      );
+    }
+
+    if (_canViewTeachers) {
+      links.add(
+        _SidebarChildLink(
+          label: 'Teachers',
+          icon: Icons.school_outlined,
+          onPressed: () => _openScreen(
+            TeachersScreen(
+              api: widget.api,
+              token: widget.session.token,
+              session: widget.session,
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (_canViewDocuments) {
+      links.add(
+        _SidebarChildLink(
+          label: 'Documents',
+          icon: Icons.description_outlined,
+          onPressed: () => _openScreen(
+            DocumentsScreen(
+              api: widget.api,
+              token: widget.session.token,
+              session: widget.session,
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (_canViewUsers) {
+      links.add(
+        _SidebarChildLink(
+          label: 'Users',
+          icon: Icons.people_outline,
+          onPressed: () => _openScreen(
+            UsersScreen(
+              api: widget.api,
+              token: widget.session.token,
+              session: widget.session,
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (_canViewRoles) {
+      links.add(
+        _SidebarChildLink(
+          label: 'Roles',
+          icon: Icons.settings_outlined,
+          onPressed: () => _openScreen(
+            RolesScreen(
+              api: widget.api,
+              token: widget.session.token,
+              session: widget.session,
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (_canViewAudits) {
+      links.add(
+        _SidebarChildLink(
+          label: 'Audit Logs',
+          icon: Icons.shield_outlined,
+          onPressed: () => _openScreen(
+            AuditLogsScreen(
+              api: widget.api,
+              token: widget.session.token,
+              session: widget.session,
+            ),
+          ),
+        ),
+      );
+    }
+
+    return links;
   }
 
   List<_SidebarChildLink> _academicSidebarLinks() {
@@ -822,7 +921,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildHrPage() {
     return _buildOverviewPage(
       title: 'HR',
-      description: 'View HR related records and reports.',
+      description: 'Manage staff, teachers, documents, users, and roles.',
       modules: _hrSidebarLinks().map((link) => link.label).toList(),
     );
   }

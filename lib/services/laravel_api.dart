@@ -9,6 +9,7 @@ import '../models/discipline_incident_models.dart';
 import '../models/dashboard_data.dart';
 import '../models/exam_models.dart';
 import '../models/fee_models.dart';
+import '../models/hr_models.dart';
 import '../models/main_attendance_models.dart';
 import '../models/settings_models.dart';
 import '../models/student_management_models.dart';
@@ -269,6 +270,551 @@ class LaravelApi {
 
     final payload = _decode(response);
     _throwIfNeeded(response, payload);
+  }
+
+  Future<StaffListPage> staffPage({
+    required String token,
+    int page = 1,
+    String? search,
+    String? type,
+  }) async {
+    final queryParameters = <String, String>{'page': '$page'};
+
+    if (search != null && search.trim().isNotEmpty) {
+      queryParameters['search'] = search.trim();
+    }
+
+    if (type != null && type.trim().isNotEmpty) {
+      queryParameters['type'] = type.trim();
+    }
+
+    final uri = Uri.parse('$baseUrl/school/staff').replace(
+      queryParameters: queryParameters,
+    );
+
+    final response = await _client.get(
+      uri,
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    return StaffListPage.fromJson(payload);
+  }
+
+  Future<StaffMember> staffDetail({
+    required String token,
+    required int staffId,
+  }) async {
+    final response = await _client.get(
+      Uri.parse('$baseUrl/school/staff/$staffId'),
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    return StaffMember.fromJson(payload);
+  }
+
+  Future<StaffMember> createStaff({
+    required String token,
+    required Map<String, dynamic> payload,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$baseUrl/school/staff'),
+      headers: _headers(token: token, jsonRequest: true),
+      body: jsonEncode(payload),
+    );
+
+    final payloadJson = _decode(response);
+    _throwIfNeeded(response, payloadJson);
+
+    return StaffMember.fromJson(payloadJson);
+  }
+
+  Future<StaffMember> updateStaff({
+    required String token,
+    required int staffId,
+    required Map<String, dynamic> payload,
+  }) async {
+    final response = await _client.put(
+      Uri.parse('$baseUrl/school/staff/$staffId'),
+      headers: _headers(token: token, jsonRequest: true),
+      body: jsonEncode(payload),
+    );
+
+    final payloadJson = _decode(response);
+    _throwIfNeeded(response, payloadJson);
+
+    return StaffMember.fromJson(payloadJson);
+  }
+
+  Future<void> deleteStaff({
+    required String token,
+    required int staffId,
+  }) async {
+    final response = await _client.delete(
+      Uri.parse('$baseUrl/school/staff/$staffId'),
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+  }
+
+  Future<TeacherListPage> teachersPage({
+    required String token,
+    int page = 1,
+    String? search,
+  }) async {
+    final queryParameters = <String, String>{'page': '$page'};
+
+    if (search != null && search.trim().isNotEmpty) {
+      queryParameters['search'] = search.trim();
+    }
+
+    final uri = Uri.parse('$baseUrl/school/teachers').replace(
+      queryParameters: queryParameters,
+    );
+
+    final response = await _client.get(
+      uri,
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    return TeacherListPage.fromJson(payload);
+  }
+
+  Future<TeacherDetail> teacherDetail({
+    required String token,
+    required int teacherId,
+  }) async {
+    final response = await _client.get(
+      Uri.parse('$baseUrl/school/teachers/$teacherId'),
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    return TeacherDetail.fromJson(payload);
+  }
+
+  Future<TeacherProfile> updateTeacherProfile({
+    required String token,
+    required int teacherId,
+    required Map<String, dynamic> payload,
+  }) async {
+    final response = await _client.put(
+      Uri.parse('$baseUrl/school/teachers/$teacherId/profile'),
+      headers: _headers(token: token, jsonRequest: true),
+      body: jsonEncode(payload),
+    );
+
+    final payloadJson = _decode(response);
+    _throwIfNeeded(response, payloadJson);
+
+    return TeacherProfile.fromDynamic(payloadJson);
+  }
+
+  Future<DocumentCategoryOptions> documentCategories({
+    required String token,
+  }) async {
+    final response = await _client.get(
+      Uri.parse('$baseUrl/school/documents/categories'),
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    return DocumentCategoryOptions.fromJson(payload);
+  }
+
+  Future<DocumentPage> documentsPage({
+    required String token,
+    int page = 1,
+    String? scope,
+    int? staffId,
+    String? category,
+    String? status,
+    String? search,
+  }) async {
+    final queryParameters = <String, String>{'page': '$page'};
+
+    if (scope != null && scope.trim().isNotEmpty) {
+      queryParameters['scope'] = scope.trim();
+    }
+
+    if (staffId != null) {
+      queryParameters['staff_id'] = '$staffId';
+    }
+
+    if (category != null && category.trim().isNotEmpty) {
+      queryParameters['category'] = category.trim();
+    }
+
+    if (status != null && status.trim().isNotEmpty) {
+      queryParameters['status'] = status.trim();
+    }
+
+    if (search != null && search.trim().isNotEmpty) {
+      queryParameters['search'] = search.trim();
+    }
+
+    final uri = Uri.parse('$baseUrl/school/documents').replace(
+      queryParameters: queryParameters,
+    );
+
+    final response = await _client.get(
+      uri,
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    return DocumentPage.fromJson(payload);
+  }
+
+  Future<DocumentItem> documentDetail({
+    required String token,
+    required int documentId,
+  }) async {
+    final response = await _client.get(
+      Uri.parse('$baseUrl/school/documents/$documentId'),
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    return DocumentItem.fromJson(payload);
+  }
+
+  Future<DocumentItem> createDocument({
+    required String token,
+    required Map<String, String> fields,
+    required String filePath,
+  }) async {
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse('$baseUrl/school/documents'),
+    );
+
+    request.headers.addAll(_headers(token: token));
+    request.fields.addAll(fields);
+    request.files.add(await http.MultipartFile.fromPath('file', filePath));
+
+    final streamed = await _client.send(request);
+    final response = await http.Response.fromStream(streamed);
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    final document = payload['document'];
+    if (document is Map<String, dynamic>) {
+      return DocumentItem.fromJson(document);
+    }
+
+    return DocumentItem.fromJson(payload);
+  }
+
+  Future<DocumentItem> updateDocument({
+    required String token,
+    required int documentId,
+    required Map<String, String> fields,
+    String? filePath,
+  }) async {
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse('$baseUrl/school/documents/$documentId'),
+    );
+
+    request.headers.addAll(_headers(token: token));
+    request.fields.addAll(fields);
+    request.fields['_method'] = 'PUT';
+
+    if (filePath != null && filePath.isNotEmpty) {
+      request.files.add(await http.MultipartFile.fromPath('file', filePath));
+    }
+
+    final streamed = await _client.send(request);
+    final response = await http.Response.fromStream(streamed);
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    final document = payload['document'];
+    if (document is Map<String, dynamic>) {
+      return DocumentItem.fromJson(document);
+    }
+
+    return DocumentItem.fromJson(payload);
+  }
+
+  Future<void> deleteDocument({
+    required String token,
+    required int documentId,
+  }) async {
+    final response = await _client.delete(
+      Uri.parse('$baseUrl/school/documents/$documentId'),
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+  }
+
+  Future<UserListPage> usersPage({
+    required String token,
+    int page = 1,
+    String? search,
+  }) async {
+    final queryParameters = <String, String>{'page': '$page'};
+
+    if (search != null && search.trim().isNotEmpty) {
+      queryParameters['search'] = search.trim();
+    }
+
+    final uri = Uri.parse('$baseUrl/school/users').replace(
+      queryParameters: queryParameters,
+    );
+
+    final response = await _client.get(
+      uri,
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    return UserListPage.fromJson(payload);
+  }
+
+  Future<UserCreateMeta> usersCreateMeta({
+    required String token,
+  }) async {
+    final response = await _client.get(
+      Uri.parse('$baseUrl/school/users/create'),
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    return UserCreateMeta.fromJson(payload);
+  }
+
+  Future<UserEditMeta> usersEditMeta({
+    required String token,
+    required int userId,
+  }) async {
+    final response = await _client.get(
+      Uri.parse('$baseUrl/school/users/$userId/edit'),
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    return UserEditMeta.fromJson(payload);
+  }
+
+  Future<UserDetail> createUser({
+    required String token,
+    required Map<String, dynamic> payload,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$baseUrl/school/users'),
+      headers: _headers(token: token, jsonRequest: true),
+      body: jsonEncode(payload),
+    );
+
+    final payloadJson = _decode(response);
+    _throwIfNeeded(response, payloadJson);
+
+    final user = payloadJson['user'];
+    if (user is Map<String, dynamic>) {
+      return UserDetail.fromJson(user);
+    }
+
+    return UserDetail.fromJson(payloadJson);
+  }
+
+  Future<UserDetail> updateUser({
+    required String token,
+    required int userId,
+    required Map<String, dynamic> payload,
+  }) async {
+    final response = await _client.put(
+      Uri.parse('$baseUrl/school/users/$userId'),
+      headers: _headers(token: token, jsonRequest: true),
+      body: jsonEncode(payload),
+    );
+
+    final payloadJson = _decode(response);
+    _throwIfNeeded(response, payloadJson);
+
+    final user = payloadJson['user'];
+    if (user is Map<String, dynamic>) {
+      return UserDetail.fromJson(user);
+    }
+
+    return UserDetail.fromJson(payloadJson);
+  }
+
+  Future<void> deleteUser({
+    required String token,
+    required int userId,
+  }) async {
+    final response = await _client.delete(
+      Uri.parse('$baseUrl/school/users/$userId'),
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+  }
+
+  Future<RoleIndexPayload> rolesIndex({
+    required String token,
+  }) async {
+    final response = await _client.get(
+      Uri.parse('$baseUrl/school/roles'),
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    return RoleIndexPayload.fromJson(payload);
+  }
+
+  Future<RoleSummary> createRole({
+    required String token,
+    required String name,
+    required List<String> permissions,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$baseUrl/school/roles'),
+      headers: _headers(token: token, jsonRequest: true),
+      body: jsonEncode({
+        'name': name,
+        'permissions': permissions,
+      }),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    final role = payload['role'];
+    if (role is Map<String, dynamic>) {
+      return RoleSummary.fromJson(role);
+    }
+
+    return RoleSummary.fromJson(payload);
+  }
+
+  Future<RoleSummary> updateRolePermissions({
+    required String token,
+    required int roleId,
+    required List<String> permissions,
+  }) async {
+    final response = await _client.put(
+      Uri.parse('$baseUrl/school/roles/$roleId/permissions'),
+      headers: _headers(token: token, jsonRequest: true),
+      body: jsonEncode({
+        'permissions': permissions,
+      }),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    final role = payload['role'];
+    if (role is Map<String, dynamic>) {
+      return RoleSummary.fromJson(role);
+    }
+
+    return RoleSummary.fromJson(payload);
+  }
+
+  Future<AuditLogPage> auditLogs({
+    required String token,
+    int page = 1,
+    int limit = 50,
+    String? search,
+    String? action,
+    int? userId,
+    String? model,
+  }) async {
+    final queryParameters = <String, String>{
+      'page': '$page',
+      'limit': '$limit',
+    };
+
+    if (search != null && search.trim().isNotEmpty) {
+      queryParameters['search'] = search.trim();
+    }
+
+    if (action != null && action.trim().isNotEmpty) {
+      queryParameters['action'] = action.trim();
+    }
+
+    if (userId != null) {
+      queryParameters['user'] = '$userId';
+    }
+
+    if (model != null && model.trim().isNotEmpty) {
+      queryParameters['model'] = model.trim();
+    }
+
+    final uri = Uri.parse('$baseUrl/school/audits').replace(
+      queryParameters: queryParameters,
+    );
+
+    final response = await _client.get(
+      uri,
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    return AuditLogPage.fromJson(payload);
+  }
+
+  Future<AuditFilterOptions> auditFilters({
+    required String token,
+  }) async {
+    final response = await _client.get(
+      Uri.parse('$baseUrl/school/audits/filters'),
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    return AuditFilterOptions.fromJson(payload);
+  }
+
+  Future<AuditLogItem> auditDetail({
+    required String token,
+    required int auditId,
+  }) async {
+    final response = await _client.get(
+      Uri.parse('$baseUrl/school/audits/$auditId'),
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    return AuditLogItem.fromJson(payload);
   }
 
   Future<ActiveAcademicYear> activeAcademicYear(String token) async {
