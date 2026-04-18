@@ -10,6 +10,7 @@ import '../models/dashboard_data.dart';
 import '../models/exam_models.dart';
 import '../models/fee_models.dart';
 import '../models/main_attendance_models.dart';
+import '../models/settings_models.dart';
 import '../models/student_management_models.dart';
 import '../models/student_list_models.dart';
 import '../models/subject_attendance_models.dart';
@@ -86,6 +87,188 @@ class LaravelApi {
     _throwIfNeeded(response, payload);
 
     return DashboardData.fromResponse(payload);
+  }
+
+  Future<SchoolProfile> schoolProfile({
+    required String token,
+  }) async {
+    final response = await _client.get(
+      Uri.parse('$baseUrl/school/profile'),
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    return SchoolProfile.fromJson(payload);
+  }
+
+  Future<SchoolProfile> updateSchoolProfile({
+    required String token,
+    required String name,
+    String? address,
+    String? contact,
+    String? logoPath,
+  }) async {
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse('$baseUrl/school/profile'),
+    );
+
+    request.headers.addAll(_headers(token: token));
+    request.fields['_method'] = 'PUT';
+    request.fields['name'] = name;
+
+    if (address != null && address.trim().isNotEmpty) {
+      request.fields['address'] = address.trim();
+    }
+
+    if (contact != null && contact.trim().isNotEmpty) {
+      request.fields['contact'] = contact.trim();
+    }
+
+    if (logoPath != null && logoPath.isNotEmpty) {
+      request.files.add(await http.MultipartFile.fromPath('logo', logoPath));
+    }
+
+    final streamed = await _client.send(request);
+    final response = await http.Response.fromStream(streamed);
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    final schoolPayload = payload['school'];
+    if (schoolPayload is Map<String, dynamic>) {
+      return SchoolProfile.fromJson(schoolPayload);
+    }
+
+    return SchoolProfile.fromJson(payload);
+  }
+
+  Future<SetupConfig> setupConfig({
+    required String token,
+  }) async {
+    final response = await _client.get(
+      Uri.parse('$baseUrl/school/setup-config'),
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    return SetupConfig.fromJson(payload);
+  }
+
+  Future<SetupConfig> updateSetupConfig({
+    required String token,
+    required String? studentRollPrefix,
+    required int studentRollNextNumber,
+    required String? invoicePrefix,
+    required int invoiceNextNumber,
+    required bool invoiceNumberIncludeDate,
+    required String dateFormat,
+  }) async {
+    final response = await _client.put(
+      Uri.parse('$baseUrl/school/setup-config'),
+      headers: _headers(token: token, jsonRequest: true),
+      body: jsonEncode({
+        'student_roll_prefix': studentRollPrefix,
+        'student_roll_next_number': studentRollNextNumber,
+        'invoice_prefix': invoicePrefix,
+        'invoice_next_number': invoiceNextNumber,
+        'invoice_number_include_date': invoiceNumberIncludeDate,
+        'date_format': dateFormat,
+      }),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    final configPayload = payload['config'];
+    if (configPayload is Map<String, dynamic>) {
+      return SetupConfig.fromJson(configPayload);
+    }
+
+    return setupConfig(token: token);
+  }
+
+  Future<List<GradeRule>> gradeSetup({
+    required String token,
+  }) async {
+    final response = await _client.get(
+      Uri.parse('$baseUrl/school/grade-setup'),
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    final rulesPayload = payload['grade_rules'];
+    if (rulesPayload is List) {
+      return rulesPayload
+          .whereType<Map<String, dynamic>>()
+          .map(GradeRule.fromJson)
+          .toList();
+    }
+
+    return const [];
+  }
+
+  Future<List<GradeRule>> updateGradeSetup({
+    required String token,
+    required List<GradeRule> rules,
+  }) async {
+    final response = await _client.put(
+      Uri.parse('$baseUrl/school/grade-setup'),
+      headers: _headers(token: token, jsonRequest: true),
+      body: jsonEncode({
+        'grade_rules': rules.map((rule) => rule.toJson()).toList(),
+      }),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    final rulesPayload = payload['grade_rules'];
+    if (rulesPayload is List) {
+      return rulesPayload
+          .whereType<Map<String, dynamic>>()
+          .map(GradeRule.fromJson)
+          .toList();
+    }
+
+    return const [];
+  }
+
+  Future<AttendanceSetting> attendanceSettings({
+    required String token,
+  }) async {
+    final response = await _client.get(
+      Uri.parse('$baseUrl/school/attendance/settings'),
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    return AttendanceSetting.fromJson(payload);
+  }
+
+  Future<void> updateAttendanceSettings({
+    required String token,
+    required int lockAfterDays,
+    required int periodsPerDay,
+  }) async {
+    final response = await _client.put(
+      Uri.parse('$baseUrl/school/attendance/settings'),
+      headers: _headers(token: token, jsonRequest: true),
+      body: jsonEncode({
+        'lock_after_days': lockAfterDays,
+        'periods_per_day': periodsPerDay,
+      }),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
   }
 
   Future<ActiveAcademicYear> activeAcademicYear(String token) async {

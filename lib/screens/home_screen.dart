@@ -6,6 +6,7 @@ import '../models/dashboard_data.dart';
 import '../services/laravel_api.dart';
 import '../widgets/summary_card.dart';
 import 'academic_years_screen.dart';
+import 'attendance_settings_screen.dart';
 import 'classes_screen.dart';
 import 'discipline_incidents_screen.dart';
 import 'exam_mark_entry_screen.dart';
@@ -13,9 +14,12 @@ import 'exam_report_screen.dart';
 import 'fee_invoices_screen.dart';
 import 'fee_payments_screen.dart';
 import 'fee_structures_screen.dart';
+import 'general_settings_screen.dart';
+import 'grade_setup_screen.dart';
 import 'levels_screen.dart';
 import 'main_attendance_screen.dart';
 import 'promotions_screen.dart';
+import 'setup_config_screen.dart';
 import 'student_incident_report_screen.dart';
 import 'student_list_report_screen.dart';
 import 'student_list_screen.dart';
@@ -88,6 +92,13 @@ class _HomeScreenState extends State<HomeScreen> {
   bool get _canViewPromotions => widget.session.roles.any(
         (role) => role.toLowerCase() == 'school_admin',
       );
+
+  bool get _isSchoolAdmin => widget.session.roles.any(
+        (role) => role.toLowerCase() == 'school_admin',
+      );
+
+  bool get _canEditAttendanceSettings =>
+      widget.session.hasPermission('attendance.edit');
 
   bool get _canViewTerms => widget.session.hasPermission('terms.view');
 
@@ -555,18 +566,59 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   List<_SidebarChildLink> _settingsSidebarLinks() {
-    return <_SidebarChildLink>[
-      _SidebarChildLink(
-        label: 'Refresh Dashboard',
-        icon: Icons.refresh,
-        onPressed: widget.onRefresh,
-      ),
-      _SidebarChildLink(
-        label: 'Sign Out',
-        icon: Icons.logout,
-        onPressed: widget.onLogout,
-      ),
-    ];
+    final links = <_SidebarChildLink>[];
+
+    if (_isSchoolAdmin) {
+      links.addAll([
+        _SidebarChildLink(
+          label: 'General',
+          icon: Icons.settings_outlined,
+          onPressed: () => _openScreen(
+            GeneralSettingsScreen(
+              api: widget.api,
+              token: widget.session.token,
+            ),
+          ),
+        ),
+        _SidebarChildLink(
+          label: 'Setup Config',
+          icon: Icons.tune_outlined,
+          onPressed: () => _openScreen(
+            SetupConfigScreen(
+              api: widget.api,
+              token: widget.session.token,
+            ),
+          ),
+        ),
+        _SidebarChildLink(
+          label: 'Grade Setup',
+          icon: Icons.grading_outlined,
+          onPressed: () => _openScreen(
+            GradeSetupScreen(
+              api: widget.api,
+              token: widget.session.token,
+            ),
+          ),
+        ),
+      ]);
+    }
+
+    if (_canEditAttendanceSettings) {
+      links.add(
+        _SidebarChildLink(
+          label: 'Attendance Settings',
+          icon: Icons.how_to_reg_outlined,
+          onPressed: () => _openScreen(
+            AttendanceSettingsScreen(
+              api: widget.api,
+              token: widget.session.token,
+            ),
+          ),
+        ),
+      );
+    }
+
+    return links;
   }
 
   Future<void> _openScreen(Widget screen, {String? title}) {
@@ -796,7 +848,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildSettingsPage() {
     return _buildOverviewPage(
       title: 'Settings',
-      description: 'Account actions and system utilities.',
+      description: 'Manage school configuration and attendance defaults.',
       modules: _settingsSidebarLinks().map((link) => link.label).toList(),
       footer: _buildPanel(
         child: Column(
