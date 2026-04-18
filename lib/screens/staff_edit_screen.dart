@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../models/hr_models.dart';
 import '../services/laravel_api.dart';
 
 class StaffEditScreen extends StatefulWidget {
@@ -41,7 +40,6 @@ class _StaffEditScreenState extends State<StaffEditScreen> {
     'female',
   ];
 
-  StaffMember? _staff;
   String _type = _types.first;
   String? _gender;
   bool _loading = true;
@@ -82,7 +80,6 @@ class _StaffEditScreenState extends State<StaffEditScreen> {
       }
 
       setState(() {
-        _staff = staff;
         _nameController.text = staff.name;
         _phoneController.text = staff.phone ?? '';
         _emailController.text = staff.email ?? '';
