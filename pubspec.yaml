@@ -38,6 +38,7 @@ dependencies:
   flutter_secure_storage: ^9.2.2
   http: ^1.2.2
   file_picker: ^8.0.0
+  path_provider: ^2.1.5
   url_launcher: ^6.2.6
 
 dev_dependencies:

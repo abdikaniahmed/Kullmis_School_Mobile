@@ -5,12 +5,14 @@ import 'package:http/http.dart' as http;
 
 import '../models/academic_management_models.dart';
 import '../models/auth_session.dart';
+import '../models/backup_models.dart';
 import '../models/discipline_incident_models.dart';
 import '../models/dashboard_data.dart';
 import '../models/exam_models.dart';
 import '../models/fee_models.dart';
 import '../models/hr_models.dart';
 import '../models/main_attendance_models.dart';
+import '../models/messaging_models.dart';
 import '../models/settings_models.dart';
 import '../models/student_management_models.dart';
 import '../models/student_list_models.dart';
@@ -190,6 +192,52 @@ class LaravelApi {
     }
 
     return setupConfig(token: token);
+  }
+
+  Future<BackupDownloadResult> downloadSchoolBackup({
+    required String token,
+  }) async {
+    final response = await _client.get(
+      Uri.parse('$baseUrl/school/backup/export'),
+      headers: _headers(token: token),
+    );
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      final payload = _decode(response);
+      _throwIfNeeded(response, payload);
+    }
+
+    final fileName = _extractDownloadFileName(
+          response.headers['content-disposition'],
+        ) ??
+        'school-backup.zip';
+
+    return BackupDownloadResult(
+      fileName: fileName,
+      bytes: response.bodyBytes,
+    );
+  }
+
+  Future<BackupRestoreResult> restoreSchoolBackup({
+    required String token,
+    required String filePath,
+  }) async {
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse('$baseUrl/school/backup/restore'),
+    );
+
+    request.headers.addAll(_headers(token: token));
+    request.files.add(
+      await http.MultipartFile.fromPath('backup_zip', filePath),
+    );
+
+    final streamed = await _client.send(request);
+    final response = await http.Response.fromStream(streamed);
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    return BackupRestoreResult.fromJson(payload);
   }
 
   Future<List<GradeRule>> gradeSetup({
@@ -434,6 +482,215 @@ class LaravelApi {
     _throwIfNeeded(response, payload);
 
     return DocumentCategoryOptions.fromJson(payload);
+  }
+
+  Future<MessagingCredentialBundle> messagingCredential({
+    required String token,
+  }) async {
+    final response = await _client.get(
+      Uri.parse('$baseUrl/school/messaging/credentials'),
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    return MessagingCredentialBundle.fromJson(payload);
+  }
+
+  Future<MessagingCredential> createMessagingCredential({
+    required String token,
+    required Map<String, dynamic> payload,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$baseUrl/school/messaging/credentials'),
+      headers: _headers(token: token, jsonRequest: true),
+      body: jsonEncode(payload),
+    );
+
+    final decoded = _decode(response);
+    _throwIfNeeded(response, decoded);
+
+    final data = decoded['data'];
+    if (data is Map<String, dynamic>) {
+      return MessagingCredential.fromJson(data);
+    }
+
+    return MessagingCredential.fromJson(decoded);
+  }
+
+  Future<MessagingCredential> updateMessagingCredential({
+    required String token,
+    required int credentialId,
+    required Map<String, dynamic> payload,
+  }) async {
+    final response = await _client.put(
+      Uri.parse('$baseUrl/school/messaging/credentials/$credentialId'),
+      headers: _headers(token: token, jsonRequest: true),
+      body: jsonEncode(payload),
+    );
+
+    final decoded = _decode(response);
+    _throwIfNeeded(response, decoded);
+
+    final data = decoded['data'];
+    if (data is Map<String, dynamic>) {
+      return MessagingCredential.fromJson(data);
+    }
+
+    return MessagingCredential.fromJson(decoded);
+  }
+
+  Future<void> testMessagingCredential({
+    required String token,
+    required String twilioAccountSid,
+    required String twilioAuthToken,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$baseUrl/school/messaging/credentials/test'),
+      headers: _headers(token: token, jsonRequest: true),
+      body: jsonEncode({
+        'twilio_account_sid': twilioAccountSid,
+        'twilio_auth_token': twilioAuthToken,
+      }),
+    );
+
+    final decoded = _decode(response);
+    _throwIfNeeded(response, decoded);
+  }
+
+  Future<List<MessageTemplateItem>> messageTemplates({
+    required String token,
+  }) async {
+    final response = await _client.get(
+      Uri.parse('$baseUrl/school/messaging/templates'),
+      headers: _headers(token: token),
+    );
+
+    final decoded = _decode(response);
+    _throwIfNeeded(response, decoded);
+
+    final data = decoded['data'];
+    if (data is List) {
+      return data
+          .whereType<Map<String, dynamic>>()
+          .map(MessageTemplateItem.fromJson)
+          .toList();
+    }
+
+    return const [];
+  }
+
+  Future<MessageTemplateItem> createMessageTemplate({
+    required String token,
+    required Map<String, dynamic> payload,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$baseUrl/school/messaging/templates'),
+      headers: _headers(token: token, jsonRequest: true),
+      body: jsonEncode(payload),
+    );
+
+    final decoded = _decode(response);
+    _throwIfNeeded(response, decoded);
+
+    final data = decoded['data'];
+    if (data is Map<String, dynamic>) {
+      return MessageTemplateItem.fromJson(data);
+    }
+
+    return MessageTemplateItem.fromJson(decoded);
+  }
+
+  Future<MessageTemplateItem> updateMessageTemplate({
+    required String token,
+    required int templateId,
+    required Map<String, dynamic> payload,
+  }) async {
+    final response = await _client.put(
+      Uri.parse('$baseUrl/school/messaging/templates/$templateId'),
+      headers: _headers(token: token, jsonRequest: true),
+      body: jsonEncode(payload),
+    );
+
+    final decoded = _decode(response);
+    _throwIfNeeded(response, decoded);
+
+    final data = decoded['data'];
+    if (data is Map<String, dynamic>) {
+      return MessageTemplateItem.fromJson(data);
+    }
+
+    return MessageTemplateItem.fromJson(decoded);
+  }
+
+  Future<void> deleteMessageTemplate({
+    required String token,
+    required int templateId,
+  }) async {
+    final response = await _client.delete(
+      Uri.parse('$baseUrl/school/messaging/templates/$templateId'),
+      headers: _headers(token: token),
+    );
+
+    final decoded = _decode(response);
+    _throwIfNeeded(response, decoded);
+  }
+
+  Future<MessagingInboxPayload> messagingInbox({
+    required String token,
+    String? channel,
+    String? direction,
+    String? search,
+  }) async {
+    final queryParameters = <String, String>{};
+
+    if (channel != null && channel.trim().isNotEmpty) {
+      queryParameters['channel'] = channel.trim();
+    }
+
+    if (direction != null && direction.trim().isNotEmpty) {
+      queryParameters['direction'] = direction.trim();
+    }
+
+    if (search != null && search.trim().isNotEmpty) {
+      queryParameters['search'] = search.trim();
+    }
+
+    final uri = Uri.parse('$baseUrl/school/messaging/inbox').replace(
+      queryParameters: queryParameters.isEmpty ? null : queryParameters,
+    );
+
+    final response = await _client.get(
+      uri,
+      headers: _headers(token: token),
+    );
+
+    final decoded = _decode(response);
+    _throwIfNeeded(response, decoded);
+
+    return MessagingInboxPayload.fromJson(decoded);
+  }
+
+  Future<MessageLogItem> sendMessage({
+    required String token,
+    required Map<String, dynamic> payload,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$baseUrl/school/messaging/messages'),
+      headers: _headers(token: token, jsonRequest: true),
+      body: jsonEncode(payload),
+    );
+
+    final decoded = _decode(response);
+    _throwIfNeeded(response, decoded);
+
+    final data = decoded['data'];
+    if (data is Map<String, dynamic>) {
+      return MessageLogItem.fromJson(data);
+    }
+
+    return MessageLogItem.fromJson(decoded);
   }
 
   Future<DocumentPage> documentsPage({
@@ -2508,6 +2765,27 @@ class LaravelApi {
     }
 
     return null;
+  }
+
+  String? _extractDownloadFileName(String? contentDisposition) {
+    if (contentDisposition == null || contentDisposition.isEmpty) {
+      return null;
+    }
+
+    final fileNameMatch = RegExp(r'filename="?([^"]+)"?').firstMatch(
+      contentDisposition,
+    );
+
+    if (fileNameMatch == null) {
+      return null;
+    }
+
+    final value = fileNameMatch.group(1)?.trim();
+    if (value == null || value.isEmpty) {
+      return null;
+    }
+
+    return value;
   }
 
   int _toInt(dynamic value) {

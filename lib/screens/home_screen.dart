@@ -8,6 +8,7 @@ import '../widgets/summary_card.dart';
 import 'academic_years_screen.dart';
 import 'attendance_settings_screen.dart';
 import 'audit_logs_screen.dart';
+import 'backup_restore_screen.dart';
 import 'classes_screen.dart';
 import 'documents_screen.dart';
 import 'exam_mark_entry_screen.dart';
@@ -19,6 +20,7 @@ import 'general_settings_screen.dart';
 import 'grade_setup_screen.dart';
 import 'levels_screen.dart';
 import 'main_attendance_screen.dart';
+import 'messaging_screen.dart';
 import 'promotions_screen.dart';
 import 'roles_screen.dart';
 import 'setup_config_screen.dart';
@@ -642,6 +644,27 @@ class _HomeScreenState extends State<HomeScreen> {
 
     if (_isSchoolAdmin) {
       links.addAll([
+        _SidebarChildLink(
+          label: 'Messaging',
+          icon: Icons.message_outlined,
+          onPressed: () => _openScreen(
+            MessagingScreen(
+              api: widget.api,
+              token: widget.session.token,
+              session: widget.session,
+            ),
+          ),
+        ),
+        _SidebarChildLink(
+          label: 'Backup & Restore',
+          icon: Icons.archive_outlined,
+          onPressed: () => _openScreen(
+            BackupRestoreScreen(
+              api: widget.api,
+              token: widget.session.token,
+            ),
+          ),
+        ),
         _SidebarChildLink(
           label: 'General',
           icon: Icons.settings_outlined,
