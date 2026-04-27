@@ -22,6 +22,13 @@ class TaskIndexPayload {
       ),
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'data': items.map((item) => item.toJson()).toList(),
+      'filters': filters.toJson(),
+    };
+  }
 }
 
 class TaskItem {
@@ -75,6 +82,59 @@ class TaskItem {
       related: TaskRelatedTarget.fromDynamic(json['related']),
     );
   }
+
+  TaskItem copyWith({
+    int? id,
+    String? title,
+    String? description,
+    String? type,
+    String? status,
+    String? priority,
+    String? visibility,
+    String? dueAt,
+    String? completedAt,
+    String? createdAt,
+    UserSummary? creator,
+    UserSummary? assignee,
+    String? relatedKind,
+    TaskRelatedTarget? related,
+  }) {
+    return TaskItem(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      description: description ?? this.description,
+      type: type ?? this.type,
+      status: status ?? this.status,
+      priority: priority ?? this.priority,
+      visibility: visibility ?? this.visibility,
+      dueAt: dueAt ?? this.dueAt,
+      completedAt: completedAt ?? this.completedAt,
+      createdAt: createdAt ?? this.createdAt,
+      creator: creator ?? this.creator,
+      assignee: assignee ?? this.assignee,
+      relatedKind: relatedKind ?? this.relatedKind,
+      related: related ?? this.related,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'title': title,
+      'description': description,
+      'type': type,
+      'status': status,
+      'priority': priority,
+      'visibility': visibility,
+      'due_at': dueAt,
+      'completed_at': completedAt,
+      'created_at': createdAt,
+      'creator': creator?.toJson(),
+      'assignee': assignee?.toJson(),
+      'related_kind': relatedKind,
+      'related': related?.toJson(),
+    };
+  }
 }
 
 class TaskRelatedTarget {
@@ -95,6 +155,13 @@ class TaskRelatedTarget {
       id: _toInt(value['id']),
       name: '${value['name'] ?? ''}'.trim(),
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+    };
   }
 }
 
@@ -140,6 +207,19 @@ class TaskFilterOptions {
     );
   }
 
+  Map<String, dynamic> toJson() {
+    return {
+      'types': types.map((option) => option.toJson()).toList(),
+      'statuses': statuses.map((option) => option.toJson()).toList(),
+      'priorities': priorities.map((option) => option.toJson()).toList(),
+      'assignees': assignees.map((user) => user.toJson()).toList(),
+      'related': {
+        'students': students.map((item) => item.toJson()).toList(),
+        'staffs': staffs.map((item) => item.toJson()).toList(),
+      },
+    };
+  }
+
   static List<TaskOption> _optionsFromList(dynamic values) {
     if (values is! List) {
       return const [];
@@ -167,6 +247,70 @@ class TaskOption {
       label: '${json['label'] ?? ''}'.trim(),
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'value': value,
+      'label': label,
+    };
+  }
+}
+
+class TaskOfflineSnapshot {
+  const TaskOfflineSnapshot({
+    required this.payload,
+    required this.statusFilter,
+    required this.typeFilter,
+    required this.priorityFilter,
+    required this.visibilityFilter,
+    required this.relatedTypeFilter,
+    required this.assignedToFilter,
+    required this.search,
+    required this.pendingCompletes,
+  });
+
+  final TaskIndexPayload payload;
+  final String statusFilter;
+  final String typeFilter;
+  final String priorityFilter;
+  final String visibilityFilter;
+  final String relatedTypeFilter;
+  final int? assignedToFilter;
+  final String search;
+  final List<int> pendingCompletes;
+
+  factory TaskOfflineSnapshot.fromJson(Map<String, dynamic> json) {
+    return TaskOfflineSnapshot(
+      payload: TaskIndexPayload.fromJson(
+        json['payload'] as Map<String, dynamic>? ?? const {},
+      ),
+      statusFilter: '${json['status_filter'] ?? ''}'.trim(),
+      typeFilter: '${json['type_filter'] ?? ''}'.trim(),
+      priorityFilter: '${json['priority_filter'] ?? ''}'.trim(),
+      visibilityFilter: '${json['visibility_filter'] ?? ''}'.trim(),
+      relatedTypeFilter: '${json['related_type_filter'] ?? ''}'.trim(),
+      assignedToFilter: _toNullableInt(json['assigned_to_filter']),
+      search: '${json['search'] ?? ''}'.trim(),
+      pendingCompletes: (json['pending_completes'] as List<dynamic>? ?? const [])
+          .map((value) => _toInt(value))
+          .where((value) => value > 0)
+          .toList(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'payload': payload.toJson(),
+      'status_filter': statusFilter,
+      'type_filter': typeFilter,
+      'priority_filter': priorityFilter,
+      'visibility_filter': visibilityFilter,
+      'related_type_filter': relatedTypeFilter,
+      'assigned_to_filter': assignedToFilter,
+      'search': search,
+      'pending_completes': pendingCompletes,
+    };
+  }
 }
 
 int _toInt(dynamic value) {
@@ -179,6 +323,14 @@ int _toInt(dynamic value) {
   }
 
   return int.tryParse('$value') ?? 0;
+}
+
+int? _toNullableInt(dynamic value) {
+  if (value == null) {
+    return null;
+  }
+
+  return int.tryParse('$value');
 }
 
 String? _toNullableString(dynamic value) {

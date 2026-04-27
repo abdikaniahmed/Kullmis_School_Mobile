@@ -4,6 +4,7 @@ import '../models/auth_session.dart';
 import '../models/hr_models.dart';
 import '../models/task_models.dart';
 import '../services/laravel_api.dart';
+import '../services/offline_cache_store.dart';
 
 class TasksScreen extends StatefulWidget {
   const TasksScreen({
@@ -23,10 +24,13 @@ class TasksScreen extends StatefulWidget {
 
 class _TasksScreenState extends State<TasksScreen> {
   final TextEditingController _searchController = TextEditingController();
+  final OfflineCacheStore _cacheStore = const FileOfflineCacheStore();
 
   TaskIndexPayload? _payload;
   bool _loading = true;
   bool _saving = false;
+  bool _usingOfflineData = false;
+  String? _statusMessage;
   String? _error;
 
   String _statusFilter = '';
@@ -35,6 +39,7 @@ class _TasksScreenState extends State<TasksScreen> {
   String _visibilityFilter = '';
   String _relatedTypeFilter = '';
   int? _assignedToFilter;
+  List<int> _pendingCompleteIds = const [];
 
   bool get _canCreate => widget.session.hasPermission('tasks.create');
   bool get _canEdit => widget.session.hasPermission('tasks.edit');
@@ -57,6 +62,7 @@ class _TasksScreenState extends State<TasksScreen> {
     setState(() {
       _loading = true;
       _error = null;
+      _statusMessage = null;
     });
 
     try {
@@ -71,15 +77,37 @@ class _TasksScreenState extends State<TasksScreen> {
         search: _searchController.text.trim(),
       );
 
+      var pendingCompletes = _pendingCompleteIds;
+      if (pendingCompletes.isNotEmpty) {
+        pendingCompletes = await _flushPendingCompletes(
+          payload.items,
+          pendingCompletes,
+        );
+      }
+
       if (!mounted) {
         return;
       }
 
       setState(() {
-        _payload = payload;
+        _payload = _applyPendingCompletesToPayload(payload, pendingCompletes);
+        _pendingCompleteIds = pendingCompletes;
         _loading = false;
+        _usingOfflineData = false;
+        _statusMessage = pendingCompletes.isEmpty
+            ? null
+            : 'Some task completions are still queued for sync.';
       });
+
+      await _writeSnapshot();
     } on ApiException catch (error) {
+      final restored = await _restoreSnapshot(
+        'Offline mode: showing last synced tasks and local updates.',
+      );
+      if (restored) {
+        return;
+      }
+
       if (!mounted) {
         return;
       }
@@ -89,6 +117,13 @@ class _TasksScreenState extends State<TasksScreen> {
         _error = error.message;
       });
     } catch (_) {
+      final restored = await _restoreSnapshot(
+        'Offline mode: showing last synced tasks and local updates.',
+      );
+      if (restored) {
+        return;
+      }
+
       if (!mounted) {
         return;
       }
@@ -98,6 +133,121 @@ class _TasksScreenState extends State<TasksScreen> {
         _error = 'Unable to load tasks.';
       });
     }
+  }
+
+  Future<List<int>> _flushPendingCompletes(
+    List<TaskItem> items,
+    List<int> pendingCompletes,
+  ) async {
+    final remaining = <int>[];
+
+    for (final taskId in pendingCompletes) {
+      final task = items.where((entry) => entry.id == taskId).firstOrNull;
+      if (task != null && task.status == 'completed') {
+        continue;
+      }
+
+      try {
+        await widget.api.completeTask(
+          token: widget.token,
+          taskId: taskId,
+        );
+      } catch (_) {
+        remaining.add(taskId);
+      }
+    }
+
+    return remaining;
+  }
+
+  TaskIndexPayload _applyPendingCompletesToPayload(
+    TaskIndexPayload payload,
+    List<int> pendingCompletes,
+  ) {
+    if (pendingCompletes.isEmpty) {
+      return payload;
+    }
+
+    return TaskIndexPayload(
+      items: payload.items.map((task) {
+        if (!pendingCompletes.contains(task.id)) {
+          return task;
+        }
+
+        return task.copyWith(status: 'completed');
+      }).toList(),
+      filters: payload.filters,
+    );
+  }
+
+  Future<bool> _restoreSnapshot(String fallbackMessage) async {
+    final json = await _cacheStore.readCacheDocument(_tasksCacheKey);
+    if (json == null) {
+      return false;
+    }
+
+    final snapshot = TaskOfflineSnapshot.fromJson(json);
+    final matchesFilters = snapshot.statusFilter == _statusFilter &&
+        snapshot.typeFilter == _typeFilter &&
+        snapshot.priorityFilter == _priorityFilter &&
+        snapshot.visibilityFilter == _visibilityFilter &&
+        snapshot.relatedTypeFilter == _relatedTypeFilter &&
+        snapshot.assignedToFilter == _assignedToFilter &&
+        snapshot.search == _searchController.text.trim();
+
+    if (!matchesFilters && _payload != null) {
+      return false;
+    }
+
+    if (!mounted) {
+      return true;
+    }
+
+    _searchController.text = snapshot.search;
+
+    setState(() {
+      _payload = _applyPendingCompletesToPayload(
+        snapshot.payload,
+        snapshot.pendingCompletes,
+      );
+      _pendingCompleteIds = snapshot.pendingCompletes;
+      _statusFilter = snapshot.statusFilter;
+      _typeFilter = snapshot.typeFilter;
+      _priorityFilter = snapshot.priorityFilter;
+      _visibilityFilter = snapshot.visibilityFilter;
+      _relatedTypeFilter = snapshot.relatedTypeFilter;
+      _assignedToFilter = snapshot.assignedToFilter;
+      _loading = false;
+      _usingOfflineData = true;
+      _statusMessage = snapshot.pendingCompletes.isEmpty
+          ? fallbackMessage
+          : 'Offline mode: showing cached tasks with queued completions.';
+      _error = null;
+    });
+
+    return true;
+  }
+
+  Future<void> _writeSnapshot() async {
+    final payload = _payload;
+    if (payload == null) {
+      return;
+    }
+
+    await _cacheStore.writeCacheDocument(
+      _tasksCacheKey,
+      TaskOfflineSnapshot(
+        payload: payload,
+        statusFilter: _statusFilter,
+        typeFilter: _typeFilter,
+        priorityFilter: _priorityFilter,
+        visibilityFilter: _visibilityFilter,
+        relatedTypeFilter: _relatedTypeFilter,
+        assignedToFilter: _assignedToFilter,
+        search: _searchController.text.trim(),
+        pendingCompletes: _pendingCompleteIds,
+      ).toJson(),
+    );
   }
 
   List<TaskItem> get _visibleItems {
@@ -169,23 +319,57 @@ class _TasksScreenState extends State<TasksScreen> {
         );
 
       await _loadTasks();
-    } on ApiException catch (error) {
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        _error = error.message;
-      });
+    } on ApiException catch (_) {
+      await _queueOfflineComplete(task);
     } catch (_) {
+      await _queueOfflineComplete(task);
+    }
+  }
+
+  Future<void> _queueOfflineComplete(TaskItem task) async {
+    final payload = _payload;
+    if (payload == null) {
       if (!mounted) {
         return;
       }
 
       setState(() {
-        _error = 'Unable to complete task.';
+        _error = 'Unable to queue task completion offline.';
       });
+      return;
     }
+
+    final pending = {
+      ..._pendingCompleteIds,
+      task.id,
+    }.toList()
+      ..sort();
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _payload = _applyPendingCompletesToPayload(payload, pending);
+      _pendingCompleteIds = pending;
+      _usingOfflineData = true;
+      _statusMessage = 'Task completion saved locally and queued for sync.';
+      _error = null;
+    });
+
+    await _writeSnapshot();
+
+    if (!mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        const SnackBar(
+          content: Text('Task completion saved locally for later sync.'),
+        ),
+      );
   }
 
   Future<void> _deleteTask(TaskItem task) async {
@@ -649,6 +833,37 @@ class _TasksScreenState extends State<TasksScreen> {
 
     return Column(
       children: [
+        if (_statusMessage != null)
+          Container(
+            width: double.infinity,
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFF4CE),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  _pendingCompleteIds.isEmpty
+                      ? Icons.cloud_off_outlined
+                      : Icons.sync_problem_outlined,
+                  size: 18,
+                  color: const Color(0xFF7A4F01),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    _statusMessage!,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: const Color(0xFF7A4F01),
+                          fontWeight: FontWeight.w600,
+                        ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         TextField(
           controller: _searchController,
           textInputAction: TextInputAction.search,
@@ -876,6 +1091,8 @@ class _TasksScreenState extends State<TasksScreen> {
                     ? '${task.related!.name} (${_labelize(task.relatedKind ?? '')})'
                     : 'General',
               ),
+              if (_pendingCompleteIds.contains(task.id))
+                const _InfoChip(label: 'Pending Sync'),
             ],
           ),
           const SizedBox(height: 10),
@@ -1016,4 +1233,10 @@ class _SummaryCard extends StatelessWidget {
       ),
     );
   }
+}
+
+const _tasksCacheKey = 'tasks_snapshot';
+
+extension<T> on Iterable<T> {
+  T? get firstOrNull => isEmpty ? null : first;
 }

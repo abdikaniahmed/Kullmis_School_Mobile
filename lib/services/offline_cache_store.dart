@@ -19,6 +19,12 @@ abstract class OfflineCacheStore {
 
   Future<void> deleteDashboard();
 
+  Future<Map<String, dynamic>?> readCacheDocument(String key);
+
+  Future<void> writeCacheDocument(String key, Map<String, dynamic> value);
+
+  Future<void> deleteCacheDocument(String key);
+
   Future<void> clear();
 }
 
@@ -66,9 +72,46 @@ class FileOfflineCacheStore implements OfflineCacheStore {
   }
 
   @override
+  Future<Map<String, dynamic>?> readCacheDocument(String key) {
+    return _readJsonFile(_documentFileName(key));
+  }
+
+  @override
+  Future<void> writeCacheDocument(String key, Map<String, dynamic> value) {
+    return _writeJsonFile(_documentFileName(key), value);
+  }
+
+  @override
+  Future<void> deleteCacheDocument(String key) {
+    return _deleteFile(_documentFileName(key));
+  }
+
+  @override
   Future<void> clear() async {
     await deleteSession();
     await deleteDashboard();
+    try {
+      final directory = await getApplicationSupportDirectory();
+      if (!await directory.exists()) {
+        return;
+      }
+
+      final entities = directory.listSync();
+      for (final entity in entities) {
+        if (entity is! File) {
+          continue;
+        }
+
+        final name = entity.uri.pathSegments.isEmpty
+            ? ''
+            : entity.uri.pathSegments.last;
+        if (!name.startsWith('cache_') || !name.endsWith('.json')) {
+          continue;
+        }
+
+        await entity.delete();
+      }
+    } catch (_) {}
   }
 
   Future<File> _file(String fileName) async {
@@ -124,11 +167,13 @@ class FileOfflineCacheStore implements OfflineCacheStore {
 class MemoryOfflineCacheStore implements OfflineCacheStore {
   AuthSession? _session;
   DashboardData? _dashboard;
+  final Map<String, Map<String, dynamic>> _documents = {};
 
   @override
   Future<void> clear() async {
     _session = null;
     _dashboard = null;
+    _documents.clear();
   }
 
   @override
@@ -142,10 +187,20 @@ class MemoryOfflineCacheStore implements OfflineCacheStore {
   }
 
   @override
+  Future<void> deleteCacheDocument(String key) async {
+    _documents.remove(key);
+  }
+
+  @override
   Future<DashboardData?> readDashboard() async => _dashboard;
 
   @override
   Future<AuthSession?> readSession() async => _session;
+
+  @override
+  Future<Map<String, dynamic>?> readCacheDocument(String key) async {
+    return _documents[key];
+  }
 
   @override
   Future<void> writeDashboard(DashboardData dashboard) async {
@@ -156,7 +211,14 @@ class MemoryOfflineCacheStore implements OfflineCacheStore {
   Future<void> writeSession(AuthSession session) async {
     _session = session;
   }
+
+  @override
+  Future<void> writeCacheDocument(String key, Map<String, dynamic> value) async {
+    _documents[key] = value;
+  }
 }
 
 const _sessionFileName = 'auth_session_cache.json';
 const _dashboardFileName = 'dashboard_cache.json';
+
+String _documentFileName(String key) => 'cache_$key.json';

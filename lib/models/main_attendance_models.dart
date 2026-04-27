@@ -13,6 +13,13 @@ class ActiveAcademicYear {
       name: '${json['name'] ?? ''}'.trim(),
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+    };
+  }
 }
 
 class MainAttendanceLevel {
@@ -29,6 +36,13 @@ class MainAttendanceLevel {
       id: _toInt(json['id']),
       name: '${json['name'] ?? ''}'.trim(),
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+    };
   }
 }
 
@@ -49,6 +63,14 @@ class MainAttendanceClass {
       name: '${json['name'] ?? ''}'.trim(),
       levelId: _toInt(json['level_id']),
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'level_id': levelId,
+    };
   }
 }
 
@@ -72,6 +94,14 @@ class MainAttendanceSessionData {
           .map(MainAttendanceStudent.fromJson)
           .toList(),
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'date': date,
+      'shift': shift,
+      'students': students.map((student) => student.toJson()).toList(),
+    };
   }
 }
 
@@ -102,6 +132,17 @@ class MainAttendanceStudent {
       remarks: '${json['remarks'] ?? ''}'.trim(),
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'student_id': studentId,
+      'name': name,
+      'roll_number': rollNumber,
+      'status': status,
+      'remarks': remarks,
+    };
+  }
 }
 
 class MainAttendanceRecordDraft {
@@ -124,6 +165,105 @@ class MainAttendanceRecordDraft {
   }
 }
 
+class MainAttendanceDraftState {
+  const MainAttendanceDraftState({
+    required this.status,
+    required this.remarks,
+  });
+
+  final String status;
+  final String remarks;
+
+  factory MainAttendanceDraftState.fromJson(Map<String, dynamic> json) {
+    return MainAttendanceDraftState(
+      status: '${json['status'] ?? 'present'}'.trim(),
+      remarks: '${json['remarks'] ?? ''}'.trim(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'status': status,
+      'remarks': remarks,
+    };
+  }
+}
+
+class MainAttendanceCacheSnapshot {
+  const MainAttendanceCacheSnapshot({
+    required this.academicYear,
+    required this.levels,
+    required this.classes,
+    required this.selectedLevelId,
+    required this.selectedClassId,
+    required this.selectedShift,
+    required this.selectedDate,
+    required this.session,
+    required this.drafts,
+  });
+
+  final ActiveAcademicYear? academicYear;
+  final List<MainAttendanceLevel> levels;
+  final List<MainAttendanceClass> classes;
+  final int? selectedLevelId;
+  final int? selectedClassId;
+  final String selectedShift;
+  final String selectedDate;
+  final MainAttendanceSessionData? session;
+  final Map<int, MainAttendanceDraftState> drafts;
+
+  factory MainAttendanceCacheSnapshot.fromJson(Map<String, dynamic> json) {
+    final draftsJson = json['drafts'] as Map<String, dynamic>? ?? const {};
+
+    return MainAttendanceCacheSnapshot(
+      academicYear: json['academic_year'] is Map<String, dynamic>
+          ? ActiveAcademicYear.fromJson(
+              json['academic_year'] as Map<String, dynamic>,
+            )
+          : null,
+      levels: (json['levels'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(MainAttendanceLevel.fromJson)
+          .toList(),
+      classes: (json['classes'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(MainAttendanceClass.fromJson)
+          .toList(),
+      selectedLevelId: _toNullableInt(json['selected_level_id']),
+      selectedClassId: _toNullableInt(json['selected_class_id']),
+      selectedShift: '${json['selected_shift'] ?? 'shift_1'}'.trim(),
+      selectedDate: '${json['selected_date'] ?? ''}'.trim(),
+      session: json['session'] is Map<String, dynamic>
+          ? MainAttendanceSessionData.fromJson(
+              json['session'] as Map<String, dynamic>,
+            )
+          : null,
+      drafts: {
+        for (final entry in draftsJson.entries)
+          int.tryParse(entry.key) ?? 0: MainAttendanceDraftState.fromJson(
+            entry.value as Map<String, dynamic>? ?? const {},
+          ),
+      }..remove(0),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'academic_year': academicYear?.toJson(),
+      'levels': levels.map((level) => level.toJson()).toList(),
+      'classes': classes.map((schoolClass) => schoolClass.toJson()).toList(),
+      'selected_level_id': selectedLevelId,
+      'selected_class_id': selectedClassId,
+      'selected_shift': selectedShift,
+      'selected_date': selectedDate,
+      'session': session?.toJson(),
+      'drafts': {
+        for (final entry in drafts.entries) '${entry.key}': entry.value.toJson(),
+      },
+    };
+  }
+}
+
 int _toInt(dynamic value) {
   if (value is int) {
     return value;
@@ -134,6 +274,14 @@ int _toInt(dynamic value) {
   }
 
   return int.tryParse('$value') ?? 0;
+}
+
+int? _toNullableInt(dynamic value) {
+  if (value == null) {
+    return null;
+  }
+
+  return int.tryParse('$value');
 }
 
 String? _toNullableString(dynamic value) {

@@ -36,6 +36,19 @@ class StudentListPage {
       hasNextPage: json['next_page_url'] != null,
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'data': items.map((item) => item.toJson()).toList(),
+      'current_page': currentPage,
+      'last_page': lastPage,
+      'total': total,
+      'from': from,
+      'to': to,
+      'prev_page_url': hasPreviousPage ? 'cached' : null,
+      'next_page_url': hasNextPage ? 'cached' : null,
+    };
+  }
 }
 
 class StudentListItem {
@@ -58,6 +71,15 @@ class StudentListItem {
       phone: _toNullableString(json['phone']),
       currentYear: StudentCurrentYear.fromDynamic(json['current_year']),
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'phone': phone,
+      'current_year': currentYear?.toJson(),
+    };
   }
 }
 
@@ -101,6 +123,65 @@ class StudentCurrentYear {
       levelName: levelName,
       className: className,
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'level_id': levelId,
+      'school_class_id': classId,
+      'roll_number': rollNumber,
+      'level': levelName == null ? null : {'name': levelName},
+      'school_class': className == null ? null : {'name': className},
+    };
+  }
+}
+
+class StudentListCacheSnapshot {
+  const StudentListCacheSnapshot({
+    required this.page,
+    required this.levels,
+    required this.classes,
+    required this.search,
+    required this.selectedLevelId,
+    required this.selectedClassId,
+  });
+
+  final StudentListPage page;
+  final List<dynamic> levels;
+  final List<dynamic> classes;
+  final String search;
+  final int? selectedLevelId;
+  final int? selectedClassId;
+
+  factory StudentListCacheSnapshot.fromJson(
+    Map<String, dynamic> json, {
+    required List<dynamic> Function(List<dynamic>) levelDecoder,
+    required List<dynamic> Function(List<dynamic>) classDecoder,
+  }) {
+    return StudentListCacheSnapshot(
+      page: StudentListPage.fromJson(
+        json['page'] as Map<String, dynamic>? ?? const {},
+      ),
+      levels: levelDecoder(json['levels'] as List<dynamic>? ?? const []),
+      classes: classDecoder(json['classes'] as List<dynamic>? ?? const []),
+      search: '${json['search'] ?? ''}'.trim(),
+      selectedLevelId: _toNullableInt(json['selected_level_id']),
+      selectedClassId: _toNullableInt(json['selected_class_id']),
+    );
+  }
+
+  Map<String, dynamic> toJson({
+    required List<Map<String, dynamic>> levels,
+    required List<Map<String, dynamic>> classes,
+  }) {
+    return {
+      'page': page.toJson(),
+      'levels': levels,
+      'classes': classes,
+      'search': search,
+      'selected_level_id': selectedLevelId,
+      'selected_class_id': selectedClassId,
+    };
   }
 }
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/main_attendance_models.dart';
 import '../services/laravel_api.dart';
+import '../services/offline_cache_store.dart';
 
 class MainAttendanceScreen extends StatefulWidget {
   const MainAttendanceScreen({
@@ -22,12 +23,14 @@ class _MainAttendanceScreenState extends State<MainAttendanceScreen> {
     'present',
     'absent',
     'late',
-    'excused'
+    'excused',
   ];
   static const _shiftOptions = <_ShiftOption>[
     _ShiftOption(value: 'shift_1', label: 'Shift 1'),
     _ShiftOption(value: 'shift_2', label: 'Shift 2'),
   ];
+
+  final OfflineCacheStore _cacheStore = const FileOfflineCacheStore();
 
   ActiveAcademicYear? _academicYear;
   List<MainAttendanceLevel> _levels = const [];
@@ -42,6 +45,9 @@ class _MainAttendanceScreenState extends State<MainAttendanceScreen> {
   bool _loadingClasses = false;
   bool _loadingSession = false;
   bool _saving = false;
+  bool _usingOfflineData = false;
+  bool _hasPendingDraft = false;
+  String? _statusMessage;
   String? _error;
 
   @override
@@ -66,6 +72,7 @@ class _MainAttendanceScreenState extends State<MainAttendanceScreen> {
     setState(() {
       _loadingMeta = true;
       _error = null;
+      _statusMessage = null;
     });
 
     try {
@@ -81,10 +88,21 @@ class _MainAttendanceScreenState extends State<MainAttendanceScreen> {
         _levels = levels;
         _selectedLevelId = levels.isNotEmpty ? levels.first.id : null;
         _loadingMeta = false;
+        _usingOfflineData = false;
+        _hasPendingDraft = false;
       });
 
       await _loadClasses();
+      await _restoreSnapshotIfNeeded(force: true);
     } on ApiException catch (error) {
+      final restored = await _restoreSnapshotIfNeeded(
+        force: true,
+        fallbackMessage: 'Offline mode: showing last synced attendance data.',
+      );
+      if (restored) {
+        return;
+      }
+
       if (!mounted) {
         return;
       }
@@ -94,6 +112,14 @@ class _MainAttendanceScreenState extends State<MainAttendanceScreen> {
         _error = error.message;
       });
     } catch (_) {
+      final restored = await _restoreSnapshotIfNeeded(
+        force: true,
+        fallbackMessage: 'Offline mode: showing last synced attendance data.',
+      );
+      if (restored) {
+        return;
+      }
+
       if (!mounted) {
         return;
       }
@@ -113,6 +139,7 @@ class _MainAttendanceScreenState extends State<MainAttendanceScreen> {
         _classes = const [];
         _selectedClassId = null;
       });
+      await _writeSnapshot();
       return;
     }
 
@@ -137,6 +164,8 @@ class _MainAttendanceScreenState extends State<MainAttendanceScreen> {
             : (classes.isNotEmpty ? classes.first.id : null);
         _loadingClasses = false;
       });
+
+      await _writeSnapshot();
     } on ApiException catch (error) {
       if (!mounted) {
         return;
@@ -178,6 +207,8 @@ class _MainAttendanceScreenState extends State<MainAttendanceScreen> {
       _selectedDate = picked;
       _clearSession();
     });
+
+    await _writeSnapshot();
   }
 
   Future<void> _loadAttendance() async {
@@ -191,6 +222,7 @@ class _MainAttendanceScreenState extends State<MainAttendanceScreen> {
     setState(() {
       _loadingSession = true;
       _error = null;
+      _statusMessage = null;
     });
 
     try {
@@ -218,8 +250,20 @@ class _MainAttendanceScreenState extends State<MainAttendanceScreen> {
             ),
         };
         _loadingSession = false;
+        _saving = false;
+        _usingOfflineData = false;
+        _hasPendingDraft = false;
       });
+
+      await _writeSnapshot();
     } on ApiException catch (error) {
+      final restored = await _restoreSnapshotIfNeeded(
+        fallbackMessage: 'Offline mode: showing last synced attendance data.',
+      );
+      if (restored) {
+        return;
+      }
+
       if (!mounted) {
         return;
       }
@@ -231,6 +275,13 @@ class _MainAttendanceScreenState extends State<MainAttendanceScreen> {
         _error = error.message;
       });
     } catch (_) {
+      final restored = await _restoreSnapshotIfNeeded(
+        fallbackMessage: 'Offline mode: showing last synced attendance data.',
+      );
+      if (restored) {
+        return;
+      }
+
       if (!mounted) {
         return;
       }
@@ -286,6 +337,13 @@ class _MainAttendanceScreenState extends State<MainAttendanceScreen> {
         return;
       }
 
+      setState(() {
+        _hasPendingDraft = false;
+        _usingOfflineData = false;
+        _statusMessage = null;
+      });
+
+      await _writeSnapshot();
       _showMessage('Attendance saved.');
       await _loadAttendance();
     } on ApiException catch (error) {
@@ -293,18 +351,38 @@ class _MainAttendanceScreenState extends State<MainAttendanceScreen> {
         return;
       }
 
+      await _writeSnapshot(
+        pendingDraft: true,
+        statusMessage:
+            'Offline draft saved on this device. Sync again when the server is reachable.',
+      );
+
       _showMessage(error.message);
       setState(() {
         _saving = false;
+        _usingOfflineData = true;
+        _hasPendingDraft = true;
+        _statusMessage =
+            'Offline draft saved on this device. Sync again when the server is reachable.';
       });
     } catch (_) {
       if (!mounted) {
         return;
       }
 
-      _showMessage('Failed to save attendance.');
+      await _writeSnapshot(
+        pendingDraft: true,
+        statusMessage:
+            'Offline draft saved on this device. Sync again when the server is reachable.',
+      );
+
+      _showMessage('Attendance saved locally as a draft.');
       setState(() {
         _saving = false;
+        _usingOfflineData = true;
+        _hasPendingDraft = true;
+        _statusMessage =
+            'Offline draft saved on this device. Sync again when the server is reachable.';
       });
     }
   }
@@ -313,6 +391,133 @@ class _MainAttendanceScreenState extends State<MainAttendanceScreen> {
     _session = null;
     _drafts = const {};
     _error = null;
+    _statusMessage = null;
+    _usingOfflineData = false;
+    _hasPendingDraft = false;
+  }
+
+  Future<bool> _restoreSnapshotIfNeeded({
+    bool force = false,
+    String? fallbackMessage,
+  }) async {
+    final json = await _cacheStore.readCacheDocument(_attendanceCacheKey);
+    if (json == null) {
+      return false;
+    }
+
+    final snapshot = MainAttendanceCacheSnapshot.fromJson(json);
+    if (!force && !_matchesSnapshot(snapshot)) {
+      return false;
+    }
+
+    final selectedDate = DateTime.tryParse(snapshot.selectedDate);
+
+    if (!mounted) {
+      return true;
+    }
+
+    setState(() {
+      _academicYear = snapshot.academicYear ?? _academicYear;
+      _levels = snapshot.levels;
+      _classes = snapshot.classes;
+      _selectedLevelId = snapshot.selectedLevelId;
+      _selectedClassId = snapshot.selectedClassId;
+      _selectedShift = snapshot.selectedShift;
+      _selectedDate = selectedDate ?? _selectedDate;
+      _session = snapshot.session;
+      _drafts = {
+        for (final entry in snapshot.drafts.entries)
+          entry.key: _AttendanceDraft(
+            status: entry.value.status,
+            remarks: entry.value.remarks,
+          ),
+      };
+      _loadingMeta = false;
+      _loadingClasses = false;
+      _loadingSession = false;
+      _saving = false;
+      _usingOfflineData = snapshot.session != null || snapshot.drafts.isNotEmpty;
+      _hasPendingDraft = snapshot.drafts.isNotEmpty;
+      _statusMessage = snapshot.drafts.isNotEmpty
+          ? 'Offline draft restored. Sync again when the server is reachable.'
+          : (fallbackMessage ?? 'Offline mode: showing last synced attendance data.');
+      _error = null;
+    });
+
+    return true;
+  }
+
+  bool _matchesSnapshot(MainAttendanceCacheSnapshot snapshot) {
+    return snapshot.selectedLevelId == _selectedLevelId &&
+        snapshot.selectedClassId == _selectedClassId &&
+        snapshot.selectedShift == _selectedShift &&
+        snapshot.selectedDate == _formatDate(_selectedDate);
+  }
+
+  Future<void> _writeSnapshot({
+    bool pendingDraft = false,
+    String? statusMessage,
+  }) async {
+    await _cacheStore.writeCacheDocument(
+      _attendanceCacheKey,
+      MainAttendanceCacheSnapshot(
+        academicYear: _academicYear,
+        levels: _levels,
+        classes: _classes,
+        selectedLevelId: _selectedLevelId,
+        selectedClassId: _selectedClassId,
+        selectedShift: _selectedShift,
+        selectedDate: _formatDate(_selectedDate),
+        session: _session,
+        drafts: {
+          for (final entry in _drafts.entries)
+            entry.key: MainAttendanceDraftState(
+              status: entry.value.status,
+              remarks: entry.value.remarks,
+            ),
+        },
+      ).toJson()
+        ..['pending_draft'] = pendingDraft
+        ..['status_message'] = statusMessage,
+    );
+  }
+
+  void _updateDraftStatus(MainAttendanceStudent student, String value) {
+    final existing = _drafts[student.id] ??
+        _AttendanceDraft(status: student.status, remarks: student.remarks);
+
+    setState(() {
+      _drafts = {
+        ..._drafts,
+        student.id: existing.copyWith(status: value),
+      };
+      _hasPendingDraft = true;
+    });
+
+    _writeSnapshot(
+      pendingDraft: true,
+      statusMessage:
+          'Offline draft saved on this device. Sync again when the server is reachable.',
+    );
+  }
+
+  void _updateDraftRemarks(MainAttendanceStudent student, String value) {
+    final existing = _drafts[student.id] ??
+        _AttendanceDraft(status: student.status, remarks: student.remarks);
+
+    setState(() {
+      _drafts = {
+        ..._drafts,
+        student.id: existing.copyWith(remarks: value),
+      };
+      _hasPendingDraft = true;
+    });
+
+    _writeSnapshot(
+      pendingDraft: true,
+      statusMessage:
+          'Offline draft saved on this device. Sync again when the server is reachable.',
+    );
   }
 
   void _showMessage(String message) {
@@ -345,13 +550,47 @@ class _MainAttendanceScreenState extends State<MainAttendanceScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Load Attendance',
-                            style: theme.textTheme.titleLarge),
+                        Text(
+                          'Load Attendance',
+                          style: theme.textTheme.titleLarge,
+                        ),
                         const SizedBox(height: 8),
                         Text(
                           'Choose the class, date, and shift to load student attendance.',
                           style: theme.textTheme.bodyMedium,
                         ),
+                        if (_statusMessage != null) ...[
+                          const SizedBox(height: 12),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFFF4CE),
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  _hasPendingDraft
+                                      ? Icons.save_outlined
+                                      : Icons.cloud_off_outlined,
+                                  size: 18,
+                                  color: const Color(0xFF7A4F01),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    _statusMessage!,
+                                    style: theme.textTheme.bodyMedium?.copyWith(
+                                      color: const Color(0xFF7A4F01),
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                         const SizedBox(height: 18),
                         _buildFilterFields(),
                         if (_isFutureDate) ...[
@@ -373,22 +612,36 @@ class _MainAttendanceScreenState extends State<MainAttendanceScreen> {
                           ),
                         ],
                         const SizedBox(height: 18),
-                        SizedBox(
-                          width: double.infinity,
-                          child: FilledButton(
-                            onPressed: _loadingSession || _loadingClasses
-                                ? null
-                                : _loadAttendance,
-                            child: _loadingSession
-                                ? const SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                : const Text('Load Attendance'),
-                          ),
+                        Wrap(
+                          spacing: 12,
+                          runSpacing: 12,
+                          children: [
+                            SizedBox(
+                              width: 220,
+                              child: FilledButton(
+                                onPressed: _loadingSession || _loadingClasses
+                                    ? null
+                                    : _loadAttendance,
+                                child: _loadingSession
+                                    ? const SizedBox(
+                                        width: 18,
+                                        height: 18,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : const Text('Load Attendance'),
+                              ),
+                            ),
+                            if (_usingOfflineData)
+                              OutlinedButton.icon(
+                                onPressed: _loadingSession || _loadingClasses
+                                    ? null
+                                    : _loadAttendance,
+                                icon: const Icon(Icons.cloud_sync_outlined),
+                                label: const Text('Retry Online'),
+                              ),
+                          ],
                         ),
                       ],
                     ),
@@ -450,11 +703,12 @@ class _MainAttendanceScreenState extends State<MainAttendanceScreen> {
               .toList(),
           onChanged: _loadingClasses
               ? null
-              : (value) {
+              : (value) async {
                   setState(() {
                     _selectedClassId = value;
                     _clearSession();
                   });
+                  await _writeSnapshot();
                 },
         ),
         const SizedBox(height: 14),
@@ -489,7 +743,7 @@ class _MainAttendanceScreenState extends State<MainAttendanceScreen> {
                 ),
               )
               .toList(),
-          onChanged: (value) {
+          onChanged: (value) async {
             if (value == null) {
               return;
             }
@@ -498,6 +752,7 @@ class _MainAttendanceScreenState extends State<MainAttendanceScreen> {
               _selectedShift = value;
               _clearSession();
             });
+            await _writeSnapshot();
           },
         ),
       ],
@@ -536,7 +791,7 @@ class _MainAttendanceScreenState extends State<MainAttendanceScreen> {
           ),
           const SizedBox(height: 12),
           Text(
-            '${_shiftLabel(session.shift)} • ${session.date}',
+            '${_shiftLabel(session.shift)} - ${session.date}',
             style: theme.textTheme.bodyLarge?.copyWith(
               color: Colors.white70,
             ),
@@ -587,7 +842,9 @@ class _MainAttendanceScreenState extends State<MainAttendanceScreen> {
                   : Text(
                       _isFutureDate
                           ? 'Future Date Not Allowed'
-                          : 'Save Attendance',
+                          : (_hasPendingDraft
+                              ? 'Sync Attendance'
+                              : 'Save Attendance'),
                     ),
             ),
           ),
@@ -649,12 +906,7 @@ class _MainAttendanceScreenState extends State<MainAttendanceScreen> {
                   return;
                 }
 
-                setState(() {
-                  _drafts = {
-                    ..._drafts,
-                    student.id: draft.copyWith(status: value),
-                  };
-                });
+                _updateDraftStatus(student, value);
               },
             ),
             const SizedBox(height: 12),
@@ -665,10 +917,7 @@ class _MainAttendanceScreenState extends State<MainAttendanceScreen> {
                 border: OutlineInputBorder(),
               ),
               onChanged: (value) {
-                _drafts = {
-                  ..._drafts,
-                  student.id: draft.copyWith(remarks: value),
-                };
+                _updateDraftRemarks(student, value);
               },
             ),
           ],
@@ -731,3 +980,5 @@ String _shiftLabel(String shift) {
       return 'Shift 1';
   }
 }
+
+const _attendanceCacheKey = 'main_attendance_snapshot';

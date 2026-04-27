@@ -4,6 +4,7 @@ import '../models/auth_session.dart';
 import '../models/main_attendance_models.dart';
 import '../models/student_list_models.dart';
 import '../services/laravel_api.dart';
+import '../services/offline_cache_store.dart';
 import 'exam_report_screen.dart';
 import 'student_detail_screen.dart';
 import 'students_create_screen.dart';
@@ -28,6 +29,7 @@ class StudentListScreen extends StatefulWidget {
 
 class _StudentListScreenState extends State<StudentListScreen> {
   final TextEditingController _searchController = TextEditingController();
+  final OfflineCacheStore _cacheStore = const FileOfflineCacheStore();
 
   List<MainAttendanceLevel> _levels = const [];
   List<MainAttendanceClass> _classes = const [];
@@ -37,6 +39,8 @@ class _StudentListScreenState extends State<StudentListScreen> {
   bool _loadingMeta = true;
   bool _loadingClasses = false;
   bool _loadingList = false;
+  bool _usingOfflineData = false;
+  String? _statusMessage;
   String? _error;
 
   bool get _canCreate => widget.session.hasPermission('students.create');
@@ -60,6 +64,7 @@ class _StudentListScreenState extends State<StudentListScreen> {
     setState(() {
       _loadingMeta = true;
       _error = null;
+      _statusMessage = null;
     });
 
     try {
@@ -72,10 +77,18 @@ class _StudentListScreenState extends State<StudentListScreen> {
       setState(() {
         _levels = levels;
         _loadingMeta = false;
+        _usingOfflineData = false;
       });
 
       await _loadStudents(page: 1);
     } on ApiException catch (error) {
+      final restored = await _restoreCachedSnapshot(
+        fallbackMessage: 'Offline mode: showing last synced student list.',
+      );
+      if (restored) {
+        return;
+      }
+
       if (!mounted) {
         return;
       }
@@ -85,6 +98,13 @@ class _StudentListScreenState extends State<StudentListScreen> {
         _error = error.message;
       });
     } catch (_) {
+      final restored = await _restoreCachedSnapshot(
+        fallbackMessage: 'Offline mode: showing last synced student list.',
+      );
+      if (restored) {
+        return;
+      }
+
       if (!mounted) {
         return;
       }
@@ -157,6 +177,7 @@ class _StudentListScreenState extends State<StudentListScreen> {
     setState(() {
       _loadingList = true;
       _error = null;
+      _statusMessage = null;
     });
 
     try {
@@ -172,11 +193,21 @@ class _StudentListScreenState extends State<StudentListScreen> {
         return;
       }
 
+      await _writeSnapshot(studentPage);
+
       setState(() {
         _page = studentPage;
         _loadingList = false;
+        _usingOfflineData = false;
       });
     } on ApiException catch (error) {
+      final restored = await _restoreCachedSnapshot(
+        fallbackMessage: 'Offline mode: showing last synced student list.',
+      );
+      if (restored) {
+        return;
+      }
+
       if (!mounted) {
         return;
       }
@@ -187,6 +218,13 @@ class _StudentListScreenState extends State<StudentListScreen> {
         _error = error.message;
       });
     } catch (_) {
+      final restored = await _restoreCachedSnapshot(
+        fallbackMessage: 'Offline mode: showing last synced student list.',
+      );
+      if (restored) {
+        return;
+      }
+
       if (!mounted) {
         return;
       }
@@ -222,6 +260,75 @@ class _StudentListScreenState extends State<StudentListScreen> {
     await _loadStudents(page: 1);
   }
 
+  Future<bool> _restoreCachedSnapshot({
+    required String fallbackMessage,
+  }) async {
+    final json = await _cacheStore.readCacheDocument(_studentListCacheKey);
+    if (json == null) {
+      return false;
+    }
+
+    final snapshot = StudentListCacheSnapshot.fromJson(
+      json,
+      levelDecoder: (items) => items
+          .whereType<Map<String, dynamic>>()
+          .map(MainAttendanceLevel.fromJson)
+          .toList(),
+      classDecoder: (items) => items
+          .whereType<Map<String, dynamic>>()
+          .map(MainAttendanceClass.fromJson)
+          .toList(),
+    );
+
+    final currentSearch = _searchController.text.trim();
+    final filtersMatch = snapshot.search == currentSearch &&
+        snapshot.selectedLevelId == _selectedLevelId &&
+        snapshot.selectedClassId == _selectedClassId;
+
+    if (!filtersMatch && _page != null) {
+      return false;
+    }
+
+    if (!mounted) {
+      return true;
+    }
+
+    _searchController.text = snapshot.search;
+
+    setState(() {
+      _levels = snapshot.levels.cast<MainAttendanceLevel>();
+      _classes = snapshot.classes.cast<MainAttendanceClass>();
+      _page = snapshot.page;
+      _selectedLevelId = snapshot.selectedLevelId;
+      _selectedClassId = snapshot.selectedClassId;
+      _loadingMeta = false;
+      _loadingClasses = false;
+      _loadingList = false;
+      _usingOfflineData = true;
+      _statusMessage = fallbackMessage;
+      _error = null;
+    });
+
+    return true;
+  }
+
+  Future<void> _writeSnapshot(StudentListPage page) async {
+    await _cacheStore.writeCacheDocument(
+      _studentListCacheKey,
+      StudentListCacheSnapshot(
+        page: page,
+        levels: _levels,
+        classes: _classes,
+        search: _searchController.text.trim(),
+        selectedLevelId: _selectedLevelId,
+        selectedClassId: _selectedClassId,
+      ).toJson(
+        levels: _levels.map((level) => level.toJson()).toList(),
+        classes: _classes.map((schoolClass) => schoolClass.toJson()).toList(),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -250,8 +357,10 @@ class _StudentListScreenState extends State<StudentListScreen> {
                         Row(
                           children: [
                             Expanded(
-                              child: Text('Students',
-                                  style: theme.textTheme.titleLarge),
+                              child: Text(
+                                'Students',
+                                style: theme.textTheme.titleLarge,
+                              ),
                             ),
                             if (_canCreate)
                               Wrap(
@@ -295,6 +404,36 @@ class _StudentListScreenState extends State<StudentListScreen> {
                           'Search by student name, phone, email, level, or class.',
                           style: theme.textTheme.bodyMedium,
                         ),
+                        if (_statusMessage != null) ...[
+                          const SizedBox(height: 12),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFFF4CE),
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(
+                                  Icons.cloud_off_outlined,
+                                  size: 18,
+                                  color: Color(0xFF7A4F01),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    _statusMessage!,
+                                    style: theme.textTheme.bodyMedium?.copyWith(
+                                      color: const Color(0xFF7A4F01),
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -308,8 +447,7 @@ class _StudentListScreenState extends State<StudentListScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Find Students',
-                            style: theme.textTheme.titleLarge),
+                        Text('Find Students', style: theme.textTheme.titleLarge),
                         const SizedBox(height: 8),
                         Text(
                           'Search by student name, phone, email, level, or class.',
@@ -392,6 +530,14 @@ class _StudentListScreenState extends State<StudentListScreen> {
                               icon: const Icon(Icons.search),
                               label: const Text('Search'),
                             ),
+                            if (_usingOfflineData)
+                              OutlinedButton.icon(
+                                onPressed: _loadingList
+                                    ? null
+                                    : () => _loadStudents(page: 1),
+                                icon: const Icon(Icons.cloud_sync_outlined),
+                                label: const Text('Retry Online'),
+                              ),
                             OutlinedButton(
                               onPressed: _loadingList ? null : _clearFilters,
                               child: const Text('Clear'),
@@ -452,8 +598,7 @@ class _StudentListScreenState extends State<StudentListScreen> {
                         Expanded(
                           child: OutlinedButton(
                             onPressed: page.hasPreviousPage && !_loadingList
-                                ? () =>
-                                    _loadStudents(page: page.currentPage - 1)
+                                ? () => _loadStudents(page: page.currentPage - 1)
                                 : null,
                             child: const Text('Prev'),
                           ),
@@ -462,8 +607,7 @@ class _StudentListScreenState extends State<StudentListScreen> {
                         Expanded(
                           child: FilledButton(
                             onPressed: page.hasNextPage && !_loadingList
-                                ? () =>
-                                    _loadStudents(page: page.currentPage + 1)
+                                ? () => _loadStudents(page: page.currentPage + 1)
                                 : null,
                             child: const Text('Next'),
                           ),
@@ -500,11 +644,11 @@ class _StudentListScreenState extends State<StudentListScreen> {
             const SizedBox(height: 10),
             _DetailRow(
               label: 'Level',
-              value: item.currentYear?.levelName ?? '—',
+              value: item.currentYear?.levelName ?? '-',
             ),
             _DetailRow(
               label: 'Class',
-              value: item.currentYear?.className ?? '—',
+              value: item.currentYear?.className ?? '-',
             ),
             _DetailRow(
               label: 'Phone',
@@ -730,3 +874,5 @@ class _DetailRow extends StatelessWidget {
     );
   }
 }
+
+const _studentListCacheKey = 'student_list_snapshot';
