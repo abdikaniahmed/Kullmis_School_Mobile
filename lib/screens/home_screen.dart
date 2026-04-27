@@ -33,6 +33,7 @@ import 'students_graduates_screen.dart';
 import 'students_upload_screen.dart';
 import 'subject_attendance_screen.dart';
 import 'subjects_screen.dart';
+import 'tasks_screen.dart';
 import 'teachers_screen.dart';
 import 'terms_screen.dart';
 import 'users_screen.dart';
@@ -445,6 +446,22 @@ class _HomeScreenState extends State<HomeScreen> {
           icon: Icons.badge_outlined,
           onPressed: () => _openScreen(
             StaffScreen(
+              api: widget.api,
+              token: widget.session.token,
+              session: widget.session,
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (widget.session.hasPermission('tasks.view')) {
+      links.add(
+        _SidebarChildLink(
+          label: 'Tasks',
+          icon: Icons.checklist_outlined,
+          onPressed: () => _openScreen(
+            TasksScreen(
               api: widget.api,
               token: widget.session.token,
               session: widget.session,

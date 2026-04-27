@@ -17,6 +17,7 @@ import '../models/settings_models.dart';
 import '../models/student_management_models.dart';
 import '../models/student_list_models.dart';
 import '../models/subject_attendance_models.dart';
+import '../models/task_models.dart';
 
 class LaravelApi {
   static const _configuredBaseUrl = String.fromEnvironment('API_BASE_URL');
@@ -824,6 +825,137 @@ class LaravelApi {
 
     final payload = _decode(response);
     _throwIfNeeded(response, payload);
+  }
+
+  Future<TaskIndexPayload> tasks({
+    required String token,
+    String? status,
+    String? type,
+    String? priority,
+    int? assignedTo,
+    String? relatedType,
+    String? visibility,
+    String? search,
+  }) async {
+    final queryParameters = <String, String>{};
+
+    if (status != null && status.trim().isNotEmpty) {
+      queryParameters['status'] = status.trim();
+    }
+
+    if (type != null && type.trim().isNotEmpty) {
+      queryParameters['type'] = type.trim();
+    }
+
+    if (priority != null && priority.trim().isNotEmpty) {
+      queryParameters['priority'] = priority.trim();
+    }
+
+    if (assignedTo != null) {
+      queryParameters['assigned_to'] = '$assignedTo';
+    }
+
+    if (relatedType != null && relatedType.trim().isNotEmpty) {
+      queryParameters['related_type'] = relatedType.trim();
+    }
+
+    if (visibility != null && visibility.trim().isNotEmpty) {
+      queryParameters['visibility'] = visibility.trim();
+    }
+
+    if (search != null && search.trim().isNotEmpty) {
+      queryParameters['search'] = search.trim();
+    }
+
+    final uri = Uri.parse('$baseUrl/school/tasks').replace(
+      queryParameters: queryParameters.isEmpty ? null : queryParameters,
+    );
+
+    final response = await _client.get(
+      uri,
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    return TaskIndexPayload.fromJson(payload);
+  }
+
+  Future<TaskItem> createTask({
+    required String token,
+    required Map<String, dynamic> payload,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$baseUrl/school/tasks'),
+      headers: _headers(token: token, jsonRequest: true),
+      body: jsonEncode(payload),
+    );
+
+    final decoded = _decode(response);
+    _throwIfNeeded(response, decoded);
+
+    final data = decoded['data'];
+    if (data is Map<String, dynamic>) {
+      return TaskItem.fromJson(data);
+    }
+
+    return TaskItem.fromJson(decoded);
+  }
+
+  Future<TaskItem> updateTask({
+    required String token,
+    required int taskId,
+    required Map<String, dynamic> payload,
+  }) async {
+    final response = await _client.put(
+      Uri.parse('$baseUrl/school/tasks/$taskId'),
+      headers: _headers(token: token, jsonRequest: true),
+      body: jsonEncode(payload),
+    );
+
+    final decoded = _decode(response);
+    _throwIfNeeded(response, decoded);
+
+    final data = decoded['data'];
+    if (data is Map<String, dynamic>) {
+      return TaskItem.fromJson(data);
+    }
+
+    return TaskItem.fromJson(decoded);
+  }
+
+  Future<TaskItem> completeTask({
+    required String token,
+    required int taskId,
+  }) async {
+    final response = await _client.patch(
+      Uri.parse('$baseUrl/school/tasks/$taskId/complete'),
+      headers: _headers(token: token),
+    );
+
+    final decoded = _decode(response);
+    _throwIfNeeded(response, decoded);
+
+    final data = decoded['data'];
+    if (data is Map<String, dynamic>) {
+      return TaskItem.fromJson(data);
+    }
+
+    return TaskItem.fromJson(decoded);
+  }
+
+  Future<void> deleteTask({
+    required String token,
+    required int taskId,
+  }) async {
+    final response = await _client.delete(
+      Uri.parse('$baseUrl/school/tasks/$taskId'),
+      headers: _headers(token: token),
+    );
+
+    final decoded = _decode(response);
+    _throwIfNeeded(response, decoded);
   }
 
   Future<UserListPage> usersPage({
