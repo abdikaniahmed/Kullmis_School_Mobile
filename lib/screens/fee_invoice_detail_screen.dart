@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/auth_session.dart';
 import '../models/fee_models.dart';
 import '../services/laravel_api.dart';
+import '../services/offline_cache_store.dart';
 
 class FeeInvoiceDetailScreen extends StatefulWidget {
   const FeeInvoiceDetailScreen({
@@ -25,8 +26,12 @@ class FeeInvoiceDetailScreen extends StatefulWidget {
 }
 
 class _FeeInvoiceDetailScreenState extends State<FeeInvoiceDetailScreen> {
+  final OfflineCacheStore _cacheStore = const FileOfflineCacheStore();
+
   FeeInvoiceDetail? _invoice;
   bool _loading = true;
+  bool _usingOfflineData = false;
+  String? _statusMessage;
   String? _error;
   bool _openedComposer = false;
 
@@ -42,6 +47,7 @@ class _FeeInvoiceDetailScreenState extends State<FeeInvoiceDetailScreen> {
     setState(() {
       _loading = true;
       _error = null;
+      _statusMessage = null;
     });
 
     try {
@@ -57,15 +63,31 @@ class _FeeInvoiceDetailScreenState extends State<FeeInvoiceDetailScreen> {
       setState(() {
         _invoice = invoice;
         _loading = false;
+        _usingOfflineData = false;
       });
 
-      if (widget.openPaymentComposer && !_openedComposer && _canPay) {
+      await _cacheStore.writeCacheDocument(
+        _invoiceCacheKey(widget.invoiceId),
+        FeeInvoiceDetailOfflineSnapshot(invoice: invoice).toJson(),
+      );
+
+      if (widget.openPaymentComposer &&
+          !_openedComposer &&
+          _canPay &&
+          !_usingOfflineData) {
         _openedComposer = true;
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _openPaymentComposer();
         });
       }
     } on ApiException catch (error) {
+      final restored = await _restoreSnapshot(
+        'Offline mode: showing last synced invoice detail.',
+      );
+      if (restored) {
+        return;
+      }
+
       if (!mounted) {
         return;
       }
@@ -76,6 +98,13 @@ class _FeeInvoiceDetailScreenState extends State<FeeInvoiceDetailScreen> {
         _error = error.message;
       });
     } catch (_) {
+      final restored = await _restoreSnapshot(
+        'Offline mode: showing last synced invoice detail.',
+      );
+      if (restored) {
+        return;
+      }
+
       if (!mounted) {
         return;
       }
@@ -88,9 +117,34 @@ class _FeeInvoiceDetailScreenState extends State<FeeInvoiceDetailScreen> {
     }
   }
 
+  Future<bool> _restoreSnapshot(String fallbackMessage) async {
+    final json = await _cacheStore.readCacheDocument(
+      _invoiceCacheKey(widget.invoiceId),
+    );
+    if (json == null) {
+      return false;
+    }
+
+    final snapshot = FeeInvoiceDetailOfflineSnapshot.fromJson(json);
+
+    if (!mounted) {
+      return true;
+    }
+
+    setState(() {
+      _invoice = snapshot.invoice;
+      _loading = false;
+      _usingOfflineData = true;
+      _statusMessage = fallbackMessage;
+      _error = null;
+    });
+
+    return true;
+  }
+
   Future<void> _openPaymentComposer() async {
     final invoice = _invoice;
-    if (invoice == null || invoice.balance <= 0) {
+    if (invoice == null || invoice.balance <= 0 || _usingOfflineData) {
       return;
     }
 
@@ -182,6 +236,13 @@ class _FeeInvoiceDetailScreenState extends State<FeeInvoiceDetailScreen> {
                                 ),
                               ],
                             ),
+                            if (_statusMessage != null) ...[
+                              const SizedBox(height: 14),
+                              _InvoiceOfflineBanner(
+                                message: _statusMessage!,
+                                onRetry: _usingOfflineData ? _loadInvoice : null,
+                              ),
+                            ],
                           ],
                         ),
                       ),
@@ -240,7 +301,8 @@ class _FeeInvoiceDetailScreenState extends State<FeeInvoiceDetailScreen> {
                             if (_canPay && invoice.balance > 0) ...[
                               const SizedBox(height: 14),
                               FilledButton.icon(
-                                onPressed: _openPaymentComposer,
+                                onPressed:
+                                    _usingOfflineData ? null : _openPaymentComposer,
                                 icon: const Icon(Icons.payments_outlined),
                                 label: const Text('Receive Payment'),
                               ),
@@ -340,6 +402,41 @@ class _FeeInvoiceDetailScreenState extends State<FeeInvoiceDetailScreen> {
               _DetailLine(label: 'Reference', value: payment.referenceNumber!),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _InvoiceOfflineBanner extends StatelessWidget {
+  const _InvoiceOfflineBanner({
+    required this.message,
+    required this.onRetry,
+  });
+
+  final String message;
+  final Future<void> Function()? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFBEAE9),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.cloud_off_outlined, color: Color(0xFFB42318)),
+          const SizedBox(width: 10),
+          Expanded(child: Text(message)),
+          if (onRetry != null)
+            TextButton(
+              onPressed: () {
+                onRetry!();
+              },
+              child: const Text('Retry Online'),
+            ),
+        ],
       ),
     );
   }
@@ -687,3 +784,5 @@ String _formatDate(String? value) {
   final day = parsed.day.toString().padLeft(2, '0');
   return '${parsed.year}-$month-$day';
 }
+
+String _invoiceCacheKey(int invoiceId) => 'fee_invoice_detail_$invoiceId';

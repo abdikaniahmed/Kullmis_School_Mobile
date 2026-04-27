@@ -282,6 +282,27 @@ class FeeInvoiceDetail {
           .toList(),
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'invoice_number': invoiceNumber,
+      'issue_date': issueDate,
+      'due_date': dueDate,
+      'total_amount': totalAmount,
+      'discount_amount': discountAmount,
+      'net_amount': netAmount,
+      'paid_amount': paidAmount,
+      'balance': balance,
+      'status': status,
+      'remarks': remarks,
+      'student': student?.toJson(),
+      'school': school?.toJson(),
+      'studentAcademicYear': studentAcademicYear?.toJson(),
+      'items': items.map((item) => item.toJson()).toList(),
+      'payments': payments.map((payment) => payment.toJson()).toList(),
+    };
+  }
 }
 
 class FeeInvoiceSchoolSummary {
@@ -308,6 +329,15 @@ class FeeInvoiceSchoolSummary {
       email: _toNullableString(value['email']),
       telephone: _toNullableString(value['telephone']),
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'name': name,
+      'address': address,
+      'email': email,
+      'telephone': telephone,
+    };
   }
 }
 
@@ -340,6 +370,14 @@ class FeeInvoiceStudentAcademicYear {
           : null,
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'roll_number': rollNumber,
+      'level': levelName == null ? null : {'name': levelName},
+      'schoolClass': className == null ? null : {'name': className},
+    };
+  }
 }
 
 class FeeInvoiceItemDetail {
@@ -359,6 +397,14 @@ class FeeInvoiceItemDetail {
       description: '${json['description'] ?? ''}'.trim(),
       amount: _toDouble(json['amount']),
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'description': description,
+      'amount': amount,
+    };
   }
 }
 
@@ -392,6 +438,17 @@ class FeePaymentRecord {
           ? _toNullableString(receivedBy['name'])
           : null,
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'amount': amount,
+      'payment_method': paymentMethod,
+      'payment_date': paymentDate,
+      'reference_no': referenceNumber,
+      'received_by': receivedByName == null ? null : {'name': receivedByName},
+    };
   }
 }
 
@@ -594,6 +651,28 @@ class FeePaymentsOfflineSnapshot {
       'search': search,
       'payment_date': paymentDate,
       'reference': reference,
+    };
+  }
+}
+
+class FeeInvoiceDetailOfflineSnapshot {
+  const FeeInvoiceDetailOfflineSnapshot({
+    required this.invoice,
+  });
+
+  final FeeInvoiceDetail invoice;
+
+  factory FeeInvoiceDetailOfflineSnapshot.fromJson(Map<String, dynamic> json) {
+    return FeeInvoiceDetailOfflineSnapshot(
+      invoice: FeeInvoiceDetail.fromJson(
+        json['invoice'] as Map<String, dynamic>? ?? const {},
+      ),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'invoice': invoice.toJson(),
     };
   }
 }
