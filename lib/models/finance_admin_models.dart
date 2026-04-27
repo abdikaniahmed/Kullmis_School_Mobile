@@ -19,6 +19,15 @@ class PaymentMethodAdminItem {
       isActive: _toBool(json['is_active']),
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'sort_order': sortOrder,
+      'is_active': isActive,
+    };
+  }
 }
 
 class ExpenseListPayload {
@@ -40,6 +49,13 @@ class ExpenseListPayload {
         json['summary'] as Map<String, dynamic>? ?? const {},
       ),
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'data': items.map((item) => item.toJson()).toList(),
+      'summary': summary.toJson(),
+    };
   }
 }
 
@@ -64,6 +80,14 @@ class ExpenseSummary {
           .toList(),
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'total_amount': totalAmount,
+      'count': count,
+      'categories': categories.map((item) => item.toJson()).toList(),
+    };
+  }
 }
 
 class ExpenseCategorySummary {
@@ -80,6 +104,13 @@ class ExpenseCategorySummary {
       label: '${json['label'] ?? ''}'.trim(),
       amount: _toDouble(json['amount']),
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'label': label,
+      'amount': amount,
+    };
   }
 }
 
@@ -129,6 +160,21 @@ class ExpenseItem {
           : null,
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'title': title,
+      'category': category,
+      'amount': amount,
+      'payment_method': paymentMethod,
+      'expense_date': expenseDate,
+      'reference_no': referenceNo,
+      'notes': notes,
+      'recorded_by': recordedByName == null ? null : {'name': recordedByName},
+      'petty_cash_budget': pettyCashBudget?.toJson(),
+    };
+  }
 }
 
 class PettyCashListPayload {
@@ -151,6 +197,13 @@ class PettyCashListPayload {
       ),
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'data': items.map((item) => item.toJson()).toList(),
+      'summary': summary.toJson(),
+    };
+  }
 }
 
 class PettyCashSummary {
@@ -167,6 +220,13 @@ class PettyCashSummary {
       activeBalance: _toDouble(json['active_balance']),
       activeCount: _toInt(json['active_count']),
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'active_balance': activeBalance,
+      'active_count': activeCount,
+    };
   }
 }
 
@@ -203,6 +263,19 @@ class PettyCashBudgetItem {
       notes: _toNullableString(json['notes']),
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'period_start': periodStart,
+      'period_end': periodEnd,
+      'opening_balance': openingBalance,
+      'current_balance': currentBalance,
+      'status': status,
+      'notes': notes,
+    };
+  }
 }
 
 class PettyCashTransactionItem {
@@ -238,6 +311,113 @@ class PettyCashTransactionItem {
           ? _toNullableString(createdBy['name'])
           : null,
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'type': type,
+      'amount': amount,
+      'transaction_date': transactionDate,
+      'reference_no': referenceNo,
+      'notes': notes,
+      'created_by': createdByName == null ? null : {'name': createdByName},
+    };
+  }
+}
+
+class ExpensesOfflineSnapshot {
+  const ExpensesOfflineSnapshot({
+    required this.payload,
+    required this.paymentMethods,
+    required this.pettyCashBudgets,
+    required this.search,
+    required this.category,
+    required this.dateFrom,
+    required this.dateTo,
+  });
+
+  final ExpenseListPayload? payload;
+  final List<PaymentMethodAdminItem> paymentMethods;
+  final List<PettyCashBudgetItem> pettyCashBudgets;
+  final String search;
+  final String category;
+  final String dateFrom;
+  final String dateTo;
+
+  factory ExpensesOfflineSnapshot.fromJson(Map<String, dynamic> json) {
+    return ExpensesOfflineSnapshot(
+      payload: json['payload'] is Map<String, dynamic>
+          ? ExpenseListPayload.fromJson(json['payload'] as Map<String, dynamic>)
+          : null,
+      paymentMethods: (json['payment_methods'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(PaymentMethodAdminItem.fromJson)
+          .toList(),
+      pettyCashBudgets:
+          (json['petty_cash_budgets'] as List<dynamic>? ?? const [])
+              .whereType<Map<String, dynamic>>()
+              .map(PettyCashBudgetItem.fromJson)
+              .toList(),
+      search: '${json['search'] ?? ''}',
+      category: '${json['category'] ?? ''}',
+      dateFrom: '${json['date_from'] ?? ''}',
+      dateTo: '${json['date_to'] ?? ''}',
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'payload': payload?.toJson(),
+      'payment_methods': paymentMethods.map((item) => item.toJson()).toList(),
+      'petty_cash_budgets': pettyCashBudgets.map((item) => item.toJson()).toList(),
+      'search': search,
+      'category': category,
+      'date_from': dateFrom,
+      'date_to': dateTo,
+    };
+  }
+}
+
+class PettyCashOfflineSnapshot {
+  const PettyCashOfflineSnapshot({
+    required this.payload,
+    required this.statusFilter,
+    required this.transactionsByBudget,
+  });
+
+  final PettyCashListPayload? payload;
+  final String statusFilter;
+  final Map<int, List<PettyCashTransactionItem>> transactionsByBudget;
+
+  factory PettyCashOfflineSnapshot.fromJson(Map<String, dynamic> json) {
+    final transactionsJson =
+        json['transactions_by_budget'] as Map<String, dynamic>? ?? const {};
+
+    return PettyCashOfflineSnapshot(
+      payload: json['payload'] is Map<String, dynamic>
+          ? PettyCashListPayload.fromJson(json['payload'] as Map<String, dynamic>)
+          : null,
+      statusFilter: '${json['status_filter'] ?? ''}',
+      transactionsByBudget: {
+        for (final entry in transactionsJson.entries)
+          _toInt(entry.key): (entry.value as List<dynamic>? ?? const [])
+              .whereType<Map<String, dynamic>>()
+              .map(PettyCashTransactionItem.fromJson)
+              .toList(),
+      },
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'payload': payload?.toJson(),
+      'status_filter': statusFilter,
+      'transactions_by_budget': {
+        for (final entry in transactionsByBudget.entries)
+          '${entry.key}': entry.value.map((item) => item.toJson()).toList(),
+      },
+    };
   }
 }
 

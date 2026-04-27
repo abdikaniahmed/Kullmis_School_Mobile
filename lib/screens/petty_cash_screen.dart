@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/auth_session.dart';
 import '../models/finance_admin_models.dart';
 import '../services/laravel_api.dart';
+import '../services/offline_cache_store.dart';
 
 class PettyCashScreen extends StatefulWidget {
   const PettyCashScreen({
@@ -21,9 +22,14 @@ class PettyCashScreen extends StatefulWidget {
 }
 
 class _PettyCashScreenState extends State<PettyCashScreen> {
+  final OfflineCacheStore _cacheStore = const FileOfflineCacheStore();
+
   PettyCashListPayload? _payload;
   String _statusFilter = '';
+  Map<int, List<PettyCashTransactionItem>> _transactionsByBudget = const {};
   bool _loading = true;
+  bool _usingOfflineData = false;
+  String? _statusMessage;
   String? _error;
 
   bool get _canCreate => widget.session.hasPermission('petty_cash.create');
@@ -40,6 +46,7 @@ class _PettyCashScreenState extends State<PettyCashScreen> {
     setState(() {
       _loading = true;
       _error = null;
+      _statusMessage = null;
     });
 
     try {
@@ -55,8 +62,18 @@ class _PettyCashScreenState extends State<PettyCashScreen> {
       setState(() {
         _payload = payload;
         _loading = false;
+        _usingOfflineData = false;
       });
+
+      await _writeSnapshot();
     } on ApiException catch (error) {
+      final restored = await _restoreSnapshot(
+        'Offline mode: showing last synced petty cash data.',
+      );
+      if (restored) {
+        return;
+      }
+
       if (!mounted) {
         return;
       }
@@ -66,6 +83,13 @@ class _PettyCashScreenState extends State<PettyCashScreen> {
         _error = error.message;
       });
     } catch (_) {
+      final restored = await _restoreSnapshot(
+        'Offline mode: showing last synced petty cash data.',
+      );
+      if (restored) {
+        return;
+      }
+
       if (!mounted) {
         return;
       }
@@ -77,7 +101,48 @@ class _PettyCashScreenState extends State<PettyCashScreen> {
     }
   }
 
+  Future<bool> _restoreSnapshot(String fallbackMessage) async {
+    final json = await _cacheStore.readCacheDocument(_pettyCashCacheKey);
+    if (json == null) {
+      return false;
+    }
+
+    final snapshot = PettyCashOfflineSnapshot.fromJson(json);
+
+    if (!mounted) {
+      return true;
+    }
+
+    setState(() {
+      _payload = snapshot.payload;
+      _statusFilter = snapshot.statusFilter;
+      _transactionsByBudget = snapshot.transactionsByBudget;
+      _loading = false;
+      _usingOfflineData = true;
+      _statusMessage = fallbackMessage;
+      _error = null;
+    });
+
+    return true;
+  }
+
+  Future<void> _writeSnapshot() async {
+    await _cacheStore.writeCacheDocument(
+      _pettyCashCacheKey,
+      PettyCashOfflineSnapshot(
+        payload: _payload,
+        statusFilter: _statusFilter,
+        transactionsByBudget: _transactionsByBudget,
+      ).toJson(),
+    );
+  }
+
   Future<void> _openBudgetEditor({PettyCashBudgetItem? budget}) async {
+    if (_usingOfflineData) {
+      _showMessage('Petty cash changes are only available while online.');
+      return;
+    }
+
     final nameController = TextEditingController(text: budget?.name ?? '');
     final periodStartController = TextEditingController(
       text: budget?.periodStart ?? _today(),
@@ -93,7 +158,9 @@ class _PettyCashScreenState extends State<PettyCashScreen> {
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: Text(budget == null ? 'Add Petty Cash Budget' : 'Edit Petty Cash Budget'),
+          title: Text(
+            budget == null ? 'Add Petty Cash Budget' : 'Edit Petty Cash Budget',
+          ),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -194,7 +261,9 @@ class _PettyCashScreenState extends State<PettyCashScreen> {
           ? null
           : periodEndController.text.trim(),
       'status': status,
-      'notes': notesController.text.trim().isEmpty ? null : notesController.text.trim(),
+      'notes': notesController.text.trim().isEmpty
+          ? null
+          : notesController.text.trim(),
     };
 
     if (budget == null) {
@@ -230,6 +299,11 @@ class _PettyCashScreenState extends State<PettyCashScreen> {
   }
 
   Future<void> _deleteBudget(PettyCashBudgetItem budget) async {
+    if (_usingOfflineData) {
+      _showMessage('Petty cash changes are only available while online.');
+      return;
+    }
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -272,6 +346,11 @@ class _PettyCashScreenState extends State<PettyCashScreen> {
   }
 
   Future<void> _topUpBudget(PettyCashBudgetItem budget) async {
+    if (_usingOfflineData) {
+      _showMessage('Petty cash changes are only available while online.');
+      return;
+    }
+
     final amountController = TextEditingController();
     final dateController = TextEditingController(text: _today());
     final referenceController = TextEditingController();
@@ -376,57 +455,99 @@ class _PettyCashScreenState extends State<PettyCashScreen> {
         budgetId: budget.id,
       );
 
+      _transactionsByBudget = {
+        ..._transactionsByBudget,
+        budget.id: transactions,
+      };
+      await _writeSnapshot();
+
       if (!mounted) {
         return;
       }
 
-      await showDialog<void>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: Text('${budget.name} Transactions'),
-          content: SizedBox(
-            width: 480,
-            child: transactions.isEmpty
-                ? const Text('No transactions recorded.')
-                : ListView.separated(
-                    shrinkWrap: true,
-                    itemCount: transactions.length,
-                    separatorBuilder: (_, __) => const Divider(height: 20),
-                    itemBuilder: (context, index) {
-                      final transaction = transactions[index];
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '${transaction.type} - ${transaction.amount.toStringAsFixed(2)}',
-                            style: const TextStyle(fontWeight: FontWeight.w600),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(transaction.transactionDate ?? '-'),
-                          if (transaction.referenceNo != null)
-                            Text('Ref: ${transaction.referenceNo}'),
-                          if (transaction.createdByName != null)
-                            Text('By: ${transaction.createdByName}'),
-                          if (transaction.notes != null)
-                            Text(transaction.notes!),
-                        ],
-                      );
-                    },
-                  ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Close'),
-            ),
-          ],
-        ),
-      );
-    } on ApiException catch (error) {
-      _showMessage(error.message);
+      await _showTransactionsDialog(budget, transactions);
+    } on ApiException catch (_) {
+      final cachedTransactions = _transactionsByBudget[budget.id];
+      if (cachedTransactions != null) {
+        if (!mounted) {
+          return;
+        }
+
+        setState(() {
+          _usingOfflineData = true;
+          _statusMessage =
+              'Offline mode: showing cached petty cash transactions.';
+        });
+        await _showTransactionsDialog(budget, cachedTransactions);
+        return;
+      }
+
+      _showMessage('Unable to load petty cash transactions.');
     } catch (_) {
+      final cachedTransactions = _transactionsByBudget[budget.id];
+      if (cachedTransactions != null) {
+        if (!mounted) {
+          return;
+        }
+
+        setState(() {
+          _usingOfflineData = true;
+          _statusMessage =
+              'Offline mode: showing cached petty cash transactions.';
+        });
+        await _showTransactionsDialog(budget, cachedTransactions);
+        return;
+      }
+
       _showMessage('Unable to load petty cash transactions.');
     }
+  }
+
+  Future<void> _showTransactionsDialog(
+    PettyCashBudgetItem budget,
+    List<PettyCashTransactionItem> transactions,
+  ) {
+    return showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('${budget.name} Transactions'),
+        content: SizedBox(
+          width: 480,
+          child: transactions.isEmpty
+              ? const Text('No transactions recorded.')
+              : ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: transactions.length,
+                  separatorBuilder: (_, __) => const Divider(height: 20),
+                  itemBuilder: (context, index) {
+                    final transaction = transactions[index];
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${transaction.type} - ${transaction.amount.toStringAsFixed(2)}',
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(transaction.transactionDate ?? '-'),
+                        if (transaction.referenceNo != null)
+                          Text('Ref: ${transaction.referenceNo}'),
+                        if (transaction.createdByName != null)
+                          Text('By: ${transaction.createdByName}'),
+                        if (transaction.notes != null) Text(transaction.notes!),
+                      ],
+                    );
+                  },
+                ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showMessage(String message) {
@@ -471,7 +592,8 @@ class _PettyCashScreenState extends State<PettyCashScreen> {
                       ),
                       if (_canCreate)
                         FilledButton.icon(
-                          onPressed: () => _openBudgetEditor(),
+                          onPressed:
+                              _usingOfflineData ? null : () => _openBudgetEditor(),
                           icon: const Icon(Icons.add),
                           label: const Text('Add'),
                         ),
@@ -490,7 +612,8 @@ class _PettyCashScreenState extends State<PettyCashScreen> {
                       ),
                       _PettyMetric(
                         label: 'Active Budgets',
-                        value: payload == null ? '0' : '${payload.summary.activeCount}',
+                        value:
+                            payload == null ? '0' : '${payload.summary.activeCount}',
                       ),
                     ],
                   ),
@@ -522,6 +645,13 @@ class _PettyCashScreenState extends State<PettyCashScreen> {
                       await _loadBudgets();
                     },
                   ),
+                  if (_statusMessage != null) ...[
+                    const SizedBox(height: 12),
+                    _PettyOfflineBanner(
+                      message: _statusMessage!,
+                      onRetry: _usingOfflineData ? _loadBudgets : null,
+                    ),
+                  ],
                   if (_error != null) ...[
                     const SizedBox(height: 12),
                     Text(
@@ -599,19 +729,24 @@ class _PettyCashScreenState extends State<PettyCashScreen> {
                             ),
                             if (_canTopUp && budget.status == 'active')
                               OutlinedButton.icon(
-                                onPressed: () => _topUpBudget(budget),
+                                onPressed:
+                                    _usingOfflineData ? null : () => _topUpBudget(budget),
                                 icon: const Icon(Icons.add_card_outlined),
                                 label: const Text('Top Up'),
                               ),
                             if (_canEdit)
                               OutlinedButton.icon(
-                                onPressed: () => _openBudgetEditor(budget: budget),
+                                onPressed: _usingOfflineData
+                                    ? null
+                                    : () => _openBudgetEditor(budget: budget),
                                 icon: const Icon(Icons.edit_outlined),
                                 label: const Text('Edit'),
                               ),
                             if (_canEdit)
                               OutlinedButton.icon(
-                                onPressed: () => _deleteBudget(budget),
+                                onPressed: _usingOfflineData
+                                    ? null
+                                    : () => _deleteBudget(budget),
                                 icon: const Icon(Icons.delete_outline),
                                 label: const Text('Delete'),
                               ),
@@ -624,6 +759,41 @@ class _PettyCashScreenState extends State<PettyCashScreen> {
               ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _PettyOfflineBanner extends StatelessWidget {
+  const _PettyOfflineBanner({
+    required this.message,
+    required this.onRetry,
+  });
+
+  final String message;
+  final Future<void> Function()? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFBEAE9),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.cloud_off_outlined, color: Color(0xFFB42318)),
+          const SizedBox(width: 10),
+          Expanded(child: Text(message)),
+          if (onRetry != null)
+            TextButton(
+              onPressed: () {
+                onRetry!();
+              },
+              child: const Text('Retry Online'),
+            ),
+        ],
       ),
     );
   }
@@ -675,3 +845,5 @@ String _today() {
   final day = now.day.toString().padLeft(2, '0');
   return '${now.year}-$month-$day';
 }
+
+const _pettyCashCacheKey = 'petty_cash_snapshot';

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/auth_session.dart';
 import '../models/finance_admin_models.dart';
 import '../services/laravel_api.dart';
+import '../services/offline_cache_store.dart';
 
 class ExpensesScreen extends StatefulWidget {
   const ExpensesScreen({
@@ -25,11 +26,14 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
   final TextEditingController _categoryController = TextEditingController();
   final TextEditingController _dateFromController = TextEditingController();
   final TextEditingController _dateToController = TextEditingController();
+  final OfflineCacheStore _cacheStore = const FileOfflineCacheStore();
 
   ExpenseListPayload? _payload;
   List<PaymentMethodAdminItem> _paymentMethods = const [];
   List<PettyCashBudgetItem> _pettyCashBudgets = const [];
   bool _loading = true;
+  bool _usingOfflineData = false;
+  String? _statusMessage;
   String? _error;
 
   bool get _canCreate => widget.session.hasPermission('expenses.create');
@@ -55,6 +59,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
     setState(() {
       _loading = true;
       _error = null;
+      _statusMessage = null;
     });
 
     try {
@@ -85,8 +90,18 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
         _paymentMethods = results[1] as List<PaymentMethodAdminItem>;
         _pettyCashBudgets = (results[2] as PettyCashListPayload).items;
         _loading = false;
+        _usingOfflineData = false;
       });
+
+      await _writeSnapshot();
     } on ApiException catch (error) {
+      final restored = await _restoreSnapshot(
+        'Offline mode: showing last synced expenses.',
+      );
+      if (restored) {
+        return;
+      }
+
       if (!mounted) {
         return;
       }
@@ -96,6 +111,13 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
         _error = error.message;
       });
     } catch (_) {
+      final restored = await _restoreSnapshot(
+        'Offline mode: showing last synced expenses.',
+      );
+      if (restored) {
+        return;
+      }
+
       if (!mounted) {
         return;
       }
@@ -107,7 +129,56 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
     }
   }
 
+  Future<bool> _restoreSnapshot(String fallbackMessage) async {
+    final json = await _cacheStore.readCacheDocument(_expensesCacheKey);
+    if (json == null) {
+      return false;
+    }
+
+    final snapshot = ExpensesOfflineSnapshot.fromJson(json);
+    _searchController.text = snapshot.search;
+    _categoryController.text = snapshot.category;
+    _dateFromController.text = snapshot.dateFrom;
+    _dateToController.text = snapshot.dateTo;
+
+    if (!mounted) {
+      return true;
+    }
+
+    setState(() {
+      _payload = snapshot.payload;
+      _paymentMethods = snapshot.paymentMethods;
+      _pettyCashBudgets = snapshot.pettyCashBudgets;
+      _loading = false;
+      _usingOfflineData = true;
+      _statusMessage = fallbackMessage;
+      _error = null;
+    });
+
+    return true;
+  }
+
+  Future<void> _writeSnapshot() async {
+    await _cacheStore.writeCacheDocument(
+      _expensesCacheKey,
+      ExpensesOfflineSnapshot(
+        payload: _payload,
+        paymentMethods: _paymentMethods,
+        pettyCashBudgets: _pettyCashBudgets,
+        search: _searchController.text.trim(),
+        category: _categoryController.text.trim(),
+        dateFrom: _dateFromController.text.trim(),
+        dateTo: _dateToController.text.trim(),
+      ).toJson(),
+    );
+  }
+
   Future<void> _openExpenseEditor({ExpenseItem? expense}) async {
+    if (_usingOfflineData) {
+      _showMessage('Expense changes are only available while online.');
+      return;
+    }
+
     final titleController = TextEditingController(text: expense?.title ?? '');
     final categoryController =
         TextEditingController(text: expense?.category ?? '');
@@ -269,7 +340,9 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
       'reference_no': referenceController.text.trim().isEmpty
           ? null
           : referenceController.text.trim(),
-      'notes': notesController.text.trim().isEmpty ? null : notesController.text.trim(),
+      'notes': notesController.text.trim().isEmpty
+          ? null
+          : notesController.text.trim(),
     };
 
     try {
@@ -300,6 +373,11 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
   }
 
   Future<void> _deleteExpense(ExpenseItem expense) async {
+    if (_usingOfflineData) {
+      _showMessage('Expense changes are only available while online.');
+      return;
+    }
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -383,7 +461,9 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                       ),
                       if (_canCreate)
                         FilledButton.icon(
-                          onPressed: () => _openExpenseEditor(),
+                          onPressed: _usingOfflineData
+                              ? null
+                              : () => _openExpenseEditor(),
                           icon: const Icon(Icons.add),
                           label: const Text('Add'),
                         ),
@@ -462,6 +542,13 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                           value: '${payload.summary.count}',
                         ),
                       ],
+                    ),
+                  ],
+                  if (_statusMessage != null) ...[
+                    const SizedBox(height: 12),
+                    _FinanceOfflineBanner(
+                      message: _statusMessage!,
+                      onRetry: _usingOfflineData ? _loadExpenses : null,
                     ),
                   ],
                   if (_error != null) ...[
@@ -565,13 +652,17 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                             children: [
                               if (_canEdit)
                                 OutlinedButton.icon(
-                                  onPressed: () => _openExpenseEditor(expense: expense),
+                                  onPressed: _usingOfflineData
+                                      ? null
+                                      : () => _openExpenseEditor(expense: expense),
                                   icon: const Icon(Icons.edit_outlined),
                                   label: const Text('Edit'),
                                 ),
                               if (_canDelete)
                                 OutlinedButton.icon(
-                                  onPressed: () => _deleteExpense(expense),
+                                  onPressed: _usingOfflineData
+                                      ? null
+                                      : () => _deleteExpense(expense),
                                   icon: const Icon(Icons.delete_outline),
                                   label: const Text('Delete'),
                                 ),
@@ -586,6 +677,41 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
             ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _FinanceOfflineBanner extends StatelessWidget {
+  const _FinanceOfflineBanner({
+    required this.message,
+    required this.onRetry,
+  });
+
+  final String message;
+  final Future<void> Function()? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFBEAE9),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.cloud_off_outlined, color: Color(0xFFB42318)),
+          const SizedBox(width: 10),
+          Expanded(child: Text(message)),
+          if (onRetry != null)
+            TextButton(
+              onPressed: () {
+                onRetry!();
+              },
+              child: const Text('Retry Online'),
+            ),
+        ],
       ),
     );
   }
@@ -637,3 +763,5 @@ String _today() {
   final day = now.day.toString().padLeft(2, '0');
   return '${now.year}-$month-$day';
 }
+
+const _expensesCacheKey = 'expenses_snapshot';
