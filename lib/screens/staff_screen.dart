@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/auth_session.dart';
 import '../models/hr_models.dart';
 import '../services/laravel_api.dart';
+import '../services/offline_cache_store.dart';
 import 'staff_create_screen.dart';
 import 'staff_edit_screen.dart';
 
@@ -24,6 +25,7 @@ class StaffScreen extends StatefulWidget {
 
 class _StaffScreenState extends State<StaffScreen> {
   final TextEditingController _searchController = TextEditingController();
+  final OfflineCacheStore _cacheStore = const FileOfflineCacheStore();
 
   static const List<String> _types = [
     '',
@@ -37,6 +39,8 @@ class _StaffScreenState extends State<StaffScreen> {
 
   StaffListPage? _page;
   bool _loading = true;
+  bool _usingOfflineData = false;
+  String? _statusMessage;
   String? _error;
   String _typeFilter = '';
 
@@ -61,6 +65,7 @@ class _StaffScreenState extends State<StaffScreen> {
     setState(() {
       _loading = true;
       _error = null;
+      _statusMessage = null;
     });
 
     try {
@@ -78,8 +83,18 @@ class _StaffScreenState extends State<StaffScreen> {
       setState(() {
         _page = result;
         _loading = false;
+        _usingOfflineData = false;
       });
+
+      await _writeSnapshot();
     } on ApiException catch (error) {
+      final restored = await _restoreSnapshot(
+        'Offline mode: showing last synced staff list.',
+      );
+      if (restored) {
+        return;
+      }
+
       if (!mounted) {
         return;
       }
@@ -90,6 +105,13 @@ class _StaffScreenState extends State<StaffScreen> {
         _error = error.message;
       });
     } catch (_) {
+      final restored = await _restoreSnapshot(
+        'Offline mode: showing last synced staff list.',
+      );
+      if (restored) {
+        return;
+      }
+
       if (!mounted) {
         return;
       }
@@ -102,7 +124,48 @@ class _StaffScreenState extends State<StaffScreen> {
     }
   }
 
+  Future<bool> _restoreSnapshot(String fallbackMessage) async {
+    final json = await _cacheStore.readCacheDocument(_staffCacheKey);
+    if (json == null) {
+      return false;
+    }
+
+    final snapshot = StaffOfflineSnapshot.fromJson(json);
+    _searchController.text = snapshot.search;
+
+    if (!mounted) {
+      return true;
+    }
+
+    setState(() {
+      _page = snapshot.page;
+      _typeFilter = snapshot.typeFilter;
+      _loading = false;
+      _usingOfflineData = true;
+      _statusMessage = fallbackMessage;
+      _error = null;
+    });
+
+    return true;
+  }
+
+  Future<void> _writeSnapshot() async {
+    await _cacheStore.writeCacheDocument(
+      _staffCacheKey,
+      StaffOfflineSnapshot(
+        page: _page,
+        search: _searchController.text.trim(),
+        typeFilter: _typeFilter,
+      ).toJson(),
+    );
+  }
+
   Future<void> _openCreate() async {
+    if (_usingOfflineData) {
+      _showMessage('Staff changes are only available while online.');
+      return;
+    }
+
     final created = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
         builder: (_) => StaffCreateScreen(
@@ -118,6 +181,11 @@ class _StaffScreenState extends State<StaffScreen> {
   }
 
   Future<void> _openEdit(StaffMember staff) async {
+    if (_usingOfflineData) {
+      _showMessage('Staff changes are only available while online.');
+      return;
+    }
+
     final updated = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
         builder: (_) => StaffEditScreen(
@@ -134,6 +202,11 @@ class _StaffScreenState extends State<StaffScreen> {
   }
 
   Future<void> _confirmDelete(StaffMember staff) async {
+    if (_usingOfflineData) {
+      _showMessage('Staff changes are only available while online.');
+      return;
+    }
+
     final shouldDelete = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -192,50 +265,72 @@ class _StaffScreenState extends State<StaffScreen> {
     }
   }
 
+  void _showMessage(String message) {
+    if (!mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
   Widget _buildFilters() {
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
-          child: TextField(
-            controller: _searchController,
-            textInputAction: TextInputAction.search,
-            decoration: const InputDecoration(
-              labelText: 'Search staff',
-              border: OutlineInputBorder(),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _searchController,
+                textInputAction: TextInputAction.search,
+                decoration: const InputDecoration(
+                  labelText: 'Search staff',
+                  border: OutlineInputBorder(),
+                ),
+                onSubmitted: (_) => _loadPage(),
+              ),
             ),
-            onSubmitted: (_) => _loadPage(),
-          ),
-        ),
-        const SizedBox(width: 12),
-        SizedBox(
-          width: 150,
-          child: DropdownButtonFormField<String>(
-            value: _typeFilter,
-            items: _types
-                .map(
-                  (value) => DropdownMenuItem(
-                    value: value,
-                    child: Text(value.isEmpty ? 'All Types' : value),
-                  ),
-                )
-                .toList(),
-            decoration: const InputDecoration(
-              labelText: 'Type',
-              border: OutlineInputBorder(),
+            const SizedBox(width: 12),
+            SizedBox(
+              width: 150,
+              child: DropdownButtonFormField<String>(
+                value: _typeFilter,
+                items: _types
+                    .map(
+                      (value) => DropdownMenuItem(
+                        value: value,
+                        child: Text(value.isEmpty ? 'All Types' : value),
+                      ),
+                    )
+                    .toList(),
+                decoration: const InputDecoration(
+                  labelText: 'Type',
+                  border: OutlineInputBorder(),
+                ),
+                onChanged: (value) {
+                  setState(() {
+                    _typeFilter = value ?? '';
+                  });
+                  _loadPage();
+                },
+              ),
             ),
-            onChanged: (value) {
-              setState(() {
-                _typeFilter = value ?? '';
-              });
-              _loadPage();
-            },
+            const SizedBox(width: 12),
+            FilledButton(
+              onPressed: _loading ? null : _loadPage,
+              child: const Text('Search'),
+            ),
+          ],
+        ),
+        if (_statusMessage != null) ...[
+          const SizedBox(height: 12),
+          _StaffOfflineBanner(
+            message: _statusMessage!,
+            onRetry: _usingOfflineData ? _loadPage : null,
           ),
-        ),
-        const SizedBox(width: 12),
-        FilledButton(
-          onPressed: _loading ? null : _loadPage,
-          child: const Text('Search'),
-        ),
+        ],
       ],
     );
   }
@@ -284,12 +379,13 @@ class _StaffScreenState extends State<StaffScreen> {
             children: [
               if (_canEdit)
                 OutlinedButton(
-                  onPressed: () => _openEdit(staff),
+                  onPressed: _usingOfflineData ? null : () => _openEdit(staff),
                   child: const Text('Edit'),
                 ),
               if (_canDelete)
                 OutlinedButton(
-                  onPressed: () => _confirmDelete(staff),
+                  onPressed:
+                      _usingOfflineData ? null : () => _confirmDelete(staff),
                   child: const Text('Delete'),
                 ),
             ],
@@ -309,7 +405,7 @@ class _StaffScreenState extends State<StaffScreen> {
         actions: [
           if (_canCreate)
             IconButton(
-              onPressed: _openCreate,
+              onPressed: _usingOfflineData ? null : _openCreate,
               icon: const Icon(Icons.add),
               tooltip: 'Add Staff',
             ),
@@ -373,6 +469,41 @@ class _StaffScreenState extends State<StaffScreen> {
   }
 }
 
+class _StaffOfflineBanner extends StatelessWidget {
+  const _StaffOfflineBanner({
+    required this.message,
+    required this.onRetry,
+  });
+
+  final String message;
+  final Future<void> Function()? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFBEAE9),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.cloud_off_outlined, color: Color(0xFFB42318)),
+          const SizedBox(width: 10),
+          Expanded(child: Text(message)),
+          if (onRetry != null)
+            TextButton(
+              onPressed: () {
+                onRetry!();
+              },
+              child: const Text('Retry Online'),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 class _InfoChip extends StatelessWidget {
   const _InfoChip({required this.label});
 
@@ -390,3 +521,5 @@ class _InfoChip extends StatelessWidget {
     );
   }
 }
+
+const _staffCacheKey = 'staff_snapshot';

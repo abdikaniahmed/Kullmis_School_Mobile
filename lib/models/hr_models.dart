@@ -36,6 +36,19 @@ class StaffListPage {
       hasNextPage: json['next_page_url'] != null,
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'data': items.map((item) => item.toJson()).toList(),
+      'current_page': currentPage,
+      'last_page': lastPage,
+      'total': total,
+      'from': from,
+      'to': to,
+      'prev_page_url': hasPreviousPage ? 'cached' : null,
+      'next_page_url': hasNextPage ? 'cached' : null,
+    };
+  }
 }
 
 class StaffMember {
@@ -76,6 +89,21 @@ class StaffMember {
       gender: _toNullableString(json['gender']),
       user: UserSummary.fromDynamic(json['user']),
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'phone': phone,
+      'email': email,
+      'position': position,
+      'type': type,
+      'address': address,
+      'date_of_birth': dateOfBirth,
+      'gender': gender,
+      'user': user?.toJson(),
+    };
   }
 }
 
@@ -537,6 +565,36 @@ class UserSummary {
       'id': id,
       'name': name,
       'email': email,
+    };
+  }
+}
+
+class StaffOfflineSnapshot {
+  const StaffOfflineSnapshot({
+    required this.page,
+    required this.search,
+    required this.typeFilter,
+  });
+
+  final StaffListPage? page;
+  final String search;
+  final String typeFilter;
+
+  factory StaffOfflineSnapshot.fromJson(Map<String, dynamic> json) {
+    return StaffOfflineSnapshot(
+      page: json['page'] is Map<String, dynamic>
+          ? StaffListPage.fromJson(json['page'] as Map<String, dynamic>)
+          : null,
+      search: '${json['search'] ?? ''}',
+      typeFilter: '${json['type_filter'] ?? ''}',
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'page': page?.toJson(),
+      'search': search,
+      'type_filter': typeFilter,
     };
   }
 }
