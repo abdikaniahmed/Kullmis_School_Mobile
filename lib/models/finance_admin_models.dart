@@ -421,6 +421,33 @@ class PettyCashOfflineSnapshot {
   }
 }
 
+class PaymentMethodsOfflineSnapshot {
+  const PaymentMethodsOfflineSnapshot({
+    required this.methods,
+    required this.includeInactive,
+  });
+
+  final List<PaymentMethodAdminItem> methods;
+  final bool includeInactive;
+
+  factory PaymentMethodsOfflineSnapshot.fromJson(Map<String, dynamic> json) {
+    return PaymentMethodsOfflineSnapshot(
+      methods: (json['methods'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(PaymentMethodAdminItem.fromJson)
+          .toList(),
+      includeInactive: _toBool(json['include_inactive']),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'methods': methods.map((item) => item.toJson()).toList(),
+      'include_inactive': includeInactive,
+    };
+  }
+}
+
 int _toInt(dynamic value) {
   if (value is int) {
     return value;
