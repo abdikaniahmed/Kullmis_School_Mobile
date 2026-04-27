@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'screens/session_gate.dart';
 import 'services/laravel_api.dart';
+import 'services/offline_cache_store.dart';
 import 'services/token_store.dart';
 
 class MyApp extends StatelessWidget {
@@ -9,10 +10,12 @@ class MyApp extends StatelessWidget {
     super.key,
     this.api,
     this.tokenStore,
+    this.offlineCacheStore,
   });
 
   final LaravelApi? api;
   final TokenStore? tokenStore;
+  final OfflineCacheStore? offlineCacheStore;
 
   @override
   Widget build(BuildContext context) {
@@ -64,6 +67,7 @@ class MyApp extends StatelessWidget {
       home: SessionGate(
         api: api ?? LaravelApi(),
         tokenStore: tokenStore ?? const SecureTokenStore(),
+        offlineCacheStore: offlineCacheStore ?? const FileOfflineCacheStore(),
       ),
     );
   }

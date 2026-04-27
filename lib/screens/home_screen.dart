@@ -51,6 +51,8 @@ class HomeScreen extends StatefulWidget {
     required this.api,
     required this.onRefresh,
     required this.onLogout,
+    this.usingOfflineData = false,
+    this.statusMessage,
   });
 
   final AuthSession session;
@@ -58,6 +60,8 @@ class HomeScreen extends StatefulWidget {
   final LaravelApi api;
   final Future<void> Function() onRefresh;
   final Future<void> Function() onLogout;
+  final bool usingOfflineData;
+  final String? statusMessage;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -1141,6 +1145,40 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Widget _buildStatusBanner() {
+    final message = widget.statusMessage;
+    if (message == null || message.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      color: widget.usingOfflineData
+          ? const Color(0xFFFFF4CE)
+          : const Color(0xFFE8F5E9),
+      child: Row(
+        children: [
+          Icon(
+            widget.usingOfflineData ? Icons.cloud_off_outlined : Icons.info_outline,
+            size: 18,
+            color: const Color(0xFF7A4F01),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              style: const TextStyle(
+                color: Color(0xFF7A4F01),
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildTransportPage() {
     return _buildOverviewPage(
       title: 'Transport',
@@ -1240,6 +1278,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     onRefresh: widget.onRefresh,
                     onLogout: widget.onLogout,
                   ),
+                  _buildStatusBanner(),
                   Expanded(
                     child: ColoredBox(
                       color: theme.scaffoldBackgroundColor,
@@ -1331,6 +1370,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   color: theme.scaffoldBackgroundColor,
                   child: Column(
                     children: [
+                      _buildStatusBanner(),
                       _buildMobileModuleBar(theme, selectedDestination),
                       Expanded(
                         child: selectedDestination.builder(),

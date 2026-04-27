@@ -6,9 +6,11 @@ class BootstrapResult {
     this.session,
     this.dashboard,
     this.error,
+    this.usingOfflineData = false,
   });
 
   final AuthSession? session;
   final DashboardData? dashboard;
   final String? error;
+  final bool usingOfflineData;
 }

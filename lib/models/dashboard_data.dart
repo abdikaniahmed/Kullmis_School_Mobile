@@ -44,6 +44,33 @@ class DashboardData {
           .toList(),
     );
   }
+
+  factory DashboardData.fromJson(Map<String, dynamic> json) {
+    return DashboardData(
+      students: _toInt(json['students']),
+      teachers: _toInt(json['teachers']),
+      subjects: _toInt(json['subjects']),
+      attendancePercent: _toDoubleOrNull(json['attendance_percent']),
+      revenueTotal: _toDouble(json['revenue_total']),
+      revenueGrowthPercent: _toDouble(json['revenue_growth_percent']),
+      monthTotals: (json['month_totals'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(MonthlyTotal.fromJson)
+          .toList(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'students': students,
+      'teachers': teachers,
+      'subjects': subjects,
+      'attendance_percent': attendancePercent,
+      'revenue_total': revenueTotal,
+      'revenue_growth_percent': revenueGrowthPercent,
+      'month_totals': monthTotals.map((month) => month.toJson()).toList(),
+    };
+  }
 }
 
 class MonthlyTotal {
@@ -62,6 +89,13 @@ class MonthlyTotal {
       label: '${json['label'] ?? '--'}',
       total: _toDouble(json['total']),
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'label': label,
+      'total': total,
+    };
   }
 }
 

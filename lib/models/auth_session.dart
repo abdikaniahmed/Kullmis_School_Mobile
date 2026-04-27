@@ -49,6 +49,28 @@ class AuthSession {
     );
   }
 
+  factory AuthSession.fromJson(Map<String, dynamic> json) {
+    return AuthSession(
+      token: '${json['token'] ?? ''}'.trim(),
+      name: '${json['name'] ?? ''}'.trim(),
+      email: '${json['email'] ?? ''}'.trim(),
+      roles: _stringValues(json['roles']),
+      permissions: _stringValues(json['permissions']),
+      schoolName: _nullableString(json['school_name']),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'token': token,
+      'name': name,
+      'email': email,
+      'roles': roles,
+      'permissions': permissions,
+      'school_name': schoolName,
+    };
+  }
+
   static List<String> _roleNames(dynamic roles) {
     if (roles is! List) {
       return const [];
@@ -77,4 +99,13 @@ class AuthSession {
         .where((value) => value.isNotEmpty)
         .toList();
   }
+}
+
+String? _nullableString(dynamic value) {
+  final normalized = '${value ?? ''}'.trim();
+  if (normalized.isEmpty) {
+    return null;
+  }
+
+  return normalized;
 }
