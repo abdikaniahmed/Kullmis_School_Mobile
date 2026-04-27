@@ -789,7 +789,7 @@ class _TasksScreenState extends State<TasksScreen> {
                               );
                             }
 
-                            if (!mounted) {
+                            if (!mounted || !context.mounted) {
                               return;
                             }
 
@@ -845,7 +845,7 @@ class _TasksScreenState extends State<TasksScreen> {
             child: Row(
               children: [
                 Icon(
-                  _pendingCompleteIds.isEmpty
+                  _usingOfflineData
                       ? Icons.cloud_off_outlined
                       : Icons.sync_problem_outlined,
                   size: 18,
@@ -884,14 +884,12 @@ class _TasksScreenState extends State<TasksScreen> {
                     value: '',
                     child: Text('All statuses'),
                   ),
-                  ...(filters?.statuses ?? const <TaskOption>[])
-                      .map(
-                        (option) => DropdownMenuItem(
-                          value: option.value,
-                          child: Text(option.label),
-                        ),
-                      )
-                      .toList(),
+                  ...(filters?.statuses ?? const <TaskOption>[]).map(
+                    (option) => DropdownMenuItem(
+                      value: option.value,
+                      child: Text(option.label),
+                    ),
+                  ),
                 ],
                 decoration: const InputDecoration(
                   labelText: 'Status',
@@ -914,14 +912,12 @@ class _TasksScreenState extends State<TasksScreen> {
                     value: '',
                     child: Text('All types'),
                   ),
-                  ...(filters?.types ?? const <TaskOption>[])
-                      .map(
-                        (option) => DropdownMenuItem(
-                          value: option.value,
-                          child: Text(option.label),
-                        ),
-                      )
-                      .toList(),
+                  ...(filters?.types ?? const <TaskOption>[]).map(
+                    (option) => DropdownMenuItem(
+                      value: option.value,
+                      child: Text(option.label),
+                    ),
+                  ),
                 ],
                 decoration: const InputDecoration(
                   labelText: 'Type',
@@ -948,14 +944,12 @@ class _TasksScreenState extends State<TasksScreen> {
                     value: '',
                     child: Text('All priorities'),
                   ),
-                  ...(filters?.priorities ?? const <TaskOption>[])
-                      .map(
-                        (option) => DropdownMenuItem(
-                          value: option.value,
-                          child: Text(option.label),
-                        ),
-                      )
-                      .toList(),
+                  ...(filters?.priorities ?? const <TaskOption>[]).map(
+                    (option) => DropdownMenuItem(
+                      value: option.value,
+                      child: Text(option.label),
+                    ),
+                  ),
                 ],
                 decoration: const InputDecoration(
                   labelText: 'Priority',
