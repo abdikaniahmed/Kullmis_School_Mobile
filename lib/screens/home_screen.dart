@@ -1014,6 +1014,53 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Widget _buildMobileModuleBar(
+    ThemeData theme,
+    _ShellDestination destination,
+  ) {
+    if (destination.sidebarChildren.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '${destination.label} Modules',
+              style: theme.textTheme.titleMedium,
+            ),
+            const SizedBox(height: 10),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: destination.sidebarChildren
+                    .map(
+                      (child) => Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: OutlinedButton.icon(
+                          onPressed: () async => child.onPressed(),
+                          icon: Icon(child.icon, size: 18),
+                          label: Text(child.label),
+                        ),
+                      ),
+                    )
+                    .toList(),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -1145,7 +1192,14 @@ class _HomeScreenState extends State<HomeScreen> {
               Expanded(
                 child: ColoredBox(
                   color: theme.scaffoldBackgroundColor,
-                  child: selectedDestination.builder(),
+                  child: Column(
+                    children: [
+                      _buildMobileModuleBar(theme, selectedDestination),
+                      Expanded(
+                        child: selectedDestination.builder(),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
