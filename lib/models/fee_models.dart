@@ -1,3 +1,5 @@
+import 'main_attendance_models.dart';
+
 class AcademicYearOption {
   const AcademicYearOption({
     required this.id,
@@ -15,6 +17,14 @@ class AcademicYearOption {
       name: '${json['name'] ?? ''}'.trim(),
       isActive: _toBool(json['is_active']),
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'is_active': isActive,
+    };
   }
 }
 
@@ -51,6 +61,18 @@ class FeeStructureItem {
           ? _toNullableString(feeType['name'])
           : null,
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'amount': amount,
+      'frequency': frequency,
+      'is_mandatory': isMandatory,
+      'is_active': isActive,
+      'fee_type': feeTypeName == null ? null : {'name': feeTypeName},
+    };
   }
 }
 
@@ -91,6 +113,19 @@ class FeeInvoicePage {
       hasPreviousPage: json['prev_page_url'] != null,
       hasNextPage: json['next_page_url'] != null,
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'data': items.map((item) => item.toJson()).toList(),
+      'current_page': currentPage,
+      'last_page': lastPage,
+      'total': total,
+      'from': from,
+      'to': to,
+      'prev_page_url': hasPreviousPage ? 'cached' : null,
+      'next_page_url': hasNextPage ? 'cached' : null,
+    };
   }
 }
 
@@ -136,6 +171,22 @@ class FeeInvoiceListItem {
       createdAt: _toNullableString(json['created_at']),
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'invoice_number': invoiceNumber,
+      'issue_date': issueDate,
+      'due_date': dueDate,
+      'net_amount': netAmount,
+      'paid_amount': paidAmount,
+      'balance': balance,
+      'status': status,
+      'remarks': remarks,
+      'student': student?.toJson(),
+      'created_at': createdAt,
+    };
+  }
 }
 
 class FeeInvoiceStudentSummary {
@@ -156,6 +207,13 @@ class FeeInvoiceStudentSummary {
       id: _toInt(value['id']),
       name: '${value['name'] ?? ''}'.trim(),
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+    };
   }
 }
 
@@ -351,6 +409,192 @@ class FeePaymentMethod {
       id: _toInt(json['id']),
       name: '${json['name'] ?? ''}'.trim(),
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+    };
+  }
+}
+
+class FeeStructuresOfflineSnapshot {
+  const FeeStructuresOfflineSnapshot({
+    required this.years,
+    required this.selectedYearId,
+    required this.fees,
+  });
+
+  final List<AcademicYearOption> years;
+  final int? selectedYearId;
+  final List<FeeStructureItem> fees;
+
+  factory FeeStructuresOfflineSnapshot.fromJson(Map<String, dynamic> json) {
+    return FeeStructuresOfflineSnapshot(
+      years: (json['years'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(AcademicYearOption.fromJson)
+          .toList(),
+      selectedYearId: _toNullableInt(json['selected_year_id']),
+      fees: (json['fees'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(FeeStructureItem.fromJson)
+          .toList(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'years': years.map((year) => year.toJson()).toList(),
+      'selected_year_id': selectedYearId,
+      'fees': fees.map((fee) => fee.toJson()).toList(),
+    };
+  }
+}
+
+class FeeInvoicesOfflineSnapshot {
+  const FeeInvoicesOfflineSnapshot({
+    required this.years,
+    required this.levels,
+    required this.classes,
+    required this.page,
+    required this.selectedYearId,
+    required this.selectedLevelId,
+    required this.selectedClassId,
+    required this.selectedStatus,
+    required this.search,
+  });
+
+  final List<AcademicYearOption> years;
+  final List<MainAttendanceLevel> levels;
+  final List<MainAttendanceClass> classes;
+  final FeeInvoicePage? page;
+  final int? selectedYearId;
+  final int? selectedLevelId;
+  final int? selectedClassId;
+  final String selectedStatus;
+  final String search;
+
+  factory FeeInvoicesOfflineSnapshot.fromJson(Map<String, dynamic> json) {
+    return FeeInvoicesOfflineSnapshot(
+      years: (json['years'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(AcademicYearOption.fromJson)
+          .toList(),
+      levels: (json['levels'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(MainAttendanceLevel.fromJson)
+          .toList(),
+      classes: (json['classes'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(MainAttendanceClass.fromJson)
+          .toList(),
+      page: json['page'] is Map<String, dynamic>
+          ? FeeInvoicePage.fromJson(json['page'] as Map<String, dynamic>)
+          : null,
+      selectedYearId: _toNullableInt(json['selected_year_id']),
+      selectedLevelId: _toNullableInt(json['selected_level_id']),
+      selectedClassId: _toNullableInt(json['selected_class_id']),
+      selectedStatus: '${json['selected_status'] ?? ''}',
+      search: '${json['search'] ?? ''}',
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'years': years.map((year) => year.toJson()).toList(),
+      'levels': levels.map((level) => level.toJson()).toList(),
+      'classes': classes.map((schoolClass) => schoolClass.toJson()).toList(),
+      'page': page?.toJson(),
+      'selected_year_id': selectedYearId,
+      'selected_level_id': selectedLevelId,
+      'selected_class_id': selectedClassId,
+      'selected_status': selectedStatus,
+      'search': search,
+    };
+  }
+}
+
+class FeePaymentsOfflineSnapshot {
+  const FeePaymentsOfflineSnapshot({
+    required this.years,
+    required this.levels,
+    required this.classes,
+    required this.methods,
+    required this.page,
+    required this.selectedYearId,
+    required this.selectedLevelId,
+    required this.selectedClassId,
+    required this.selectedStatus,
+    required this.selectedMethod,
+    required this.search,
+    required this.paymentDate,
+    required this.reference,
+  });
+
+  final List<AcademicYearOption> years;
+  final List<MainAttendanceLevel> levels;
+  final List<MainAttendanceClass> classes;
+  final List<FeePaymentMethod> methods;
+  final FeeInvoicePage? page;
+  final int? selectedYearId;
+  final int? selectedLevelId;
+  final int? selectedClassId;
+  final String selectedStatus;
+  final String? selectedMethod;
+  final String search;
+  final String paymentDate;
+  final String reference;
+
+  factory FeePaymentsOfflineSnapshot.fromJson(Map<String, dynamic> json) {
+    return FeePaymentsOfflineSnapshot(
+      years: (json['years'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(AcademicYearOption.fromJson)
+          .toList(),
+      levels: (json['levels'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(MainAttendanceLevel.fromJson)
+          .toList(),
+      classes: (json['classes'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(MainAttendanceClass.fromJson)
+          .toList(),
+      methods: (json['methods'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(FeePaymentMethod.fromJson)
+          .toList(),
+      page: json['page'] is Map<String, dynamic>
+          ? FeeInvoicePage.fromJson(json['page'] as Map<String, dynamic>)
+          : null,
+      selectedYearId: _toNullableInt(json['selected_year_id']),
+      selectedLevelId: _toNullableInt(json['selected_level_id']),
+      selectedClassId: _toNullableInt(json['selected_class_id']),
+      selectedStatus: '${json['selected_status'] ?? ''}',
+      selectedMethod: _toNullableString(json['selected_method']),
+      search: '${json['search'] ?? ''}',
+      paymentDate: '${json['payment_date'] ?? ''}',
+      reference: '${json['reference'] ?? ''}',
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'years': years.map((year) => year.toJson()).toList(),
+      'levels': levels.map((level) => level.toJson()).toList(),
+      'classes': classes.map((schoolClass) => schoolClass.toJson()).toList(),
+      'methods': methods.map((method) => method.toJson()).toList(),
+      'page': page?.toJson(),
+      'selected_year_id': selectedYearId,
+      'selected_level_id': selectedLevelId,
+      'selected_class_id': selectedClassId,
+      'selected_status': selectedStatus,
+      'selected_method': selectedMethod,
+      'search': search,
+      'payment_date': paymentDate,
+      'reference': reference,
+    };
   }
 }
 

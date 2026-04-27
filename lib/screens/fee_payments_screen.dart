@@ -4,6 +4,7 @@ import '../models/auth_session.dart';
 import '../models/fee_models.dart';
 import '../models/main_attendance_models.dart';
 import '../services/laravel_api.dart';
+import '../services/offline_cache_store.dart';
 import 'fee_invoice_detail_screen.dart';
 
 class FeePaymentsScreen extends StatefulWidget {
@@ -28,6 +29,7 @@ class _FeePaymentsScreenState extends State<FeePaymentsScreen> {
       TextEditingController(text: _today());
   final TextEditingController _referenceController = TextEditingController();
   final Map<int, TextEditingController> _amountControllers = {};
+  final OfflineCacheStore _cacheStore = const FileOfflineCacheStore();
 
   List<AcademicYearOption> _years = const [];
   List<MainAttendanceLevel> _levels = const [];
@@ -43,6 +45,8 @@ class _FeePaymentsScreenState extends State<FeePaymentsScreen> {
   bool _loadingClasses = false;
   bool _loadingList = false;
   int? _submittingInvoiceId;
+  bool _usingOfflineData = false;
+  String? _statusMessage;
   String? _error;
 
   @override
@@ -66,6 +70,7 @@ class _FeePaymentsScreenState extends State<FeePaymentsScreen> {
     setState(() {
       _loadingMeta = true;
       _error = null;
+      _statusMessage = null;
     });
 
     try {
@@ -97,10 +102,18 @@ class _FeePaymentsScreenState extends State<FeePaymentsScreen> {
             ? activeYear.id
             : (years.isNotEmpty ? years.first.id : null);
         _loadingMeta = false;
+        _usingOfflineData = false;
       });
 
       await _loadInvoices(page: 1);
     } on ApiException catch (error) {
+      final restored = await _restoreSnapshot(
+        'Offline mode: showing last synced outstanding invoices.',
+      );
+      if (restored) {
+        return;
+      }
+
       if (!mounted) {
         return;
       }
@@ -110,6 +123,13 @@ class _FeePaymentsScreenState extends State<FeePaymentsScreen> {
         _error = error.message;
       });
     } catch (_) {
+      final restored = await _restoreSnapshot(
+        'Offline mode: showing last synced outstanding invoices.',
+      );
+      if (restored) {
+        return;
+      }
+
       if (!mounted) {
         return;
       }
@@ -144,6 +164,7 @@ class _FeePaymentsScreenState extends State<FeePaymentsScreen> {
             : null;
         _loadingClasses = false;
       });
+      await _writeSnapshot();
     } on ApiException catch (error) {
       if (!mounted) {
         return;
@@ -173,6 +194,7 @@ class _FeePaymentsScreenState extends State<FeePaymentsScreen> {
     setState(() {
       _loadingList = true;
       _error = null;
+      _statusMessage = null;
     });
 
     try {
@@ -196,8 +218,17 @@ class _FeePaymentsScreenState extends State<FeePaymentsScreen> {
       setState(() {
         _page = result;
         _loadingList = false;
+        _usingOfflineData = false;
       });
+      await _writeSnapshot();
     } on ApiException catch (error) {
+      final restored = await _restoreSnapshot(
+        'Offline mode: showing last synced outstanding invoices.',
+      );
+      if (restored) {
+        return;
+      }
+
       if (!mounted) {
         return;
       }
@@ -208,6 +239,13 @@ class _FeePaymentsScreenState extends State<FeePaymentsScreen> {
         _error = error.message;
       });
     } catch (_) {
+      final restored = await _restoreSnapshot(
+        'Offline mode: showing last synced outstanding invoices.',
+      );
+      if (restored) {
+        return;
+      }
+
       if (!mounted) {
         return;
       }
@@ -269,6 +307,68 @@ class _FeePaymentsScreenState extends State<FeePaymentsScreen> {
 
     await _loadClasses();
     await _loadInvoices(page: 1);
+  }
+
+  Future<bool> _restoreSnapshot(String fallbackMessage) async {
+    final json = await _cacheStore.readCacheDocument(_feePaymentsCacheKey);
+    if (json == null) {
+      return false;
+    }
+
+    final snapshot = FeePaymentsOfflineSnapshot.fromJson(json);
+    _searchController.text = snapshot.search;
+    _paymentDateController.text =
+        snapshot.paymentDate.isEmpty ? _today() : snapshot.paymentDate;
+    _referenceController.text = snapshot.reference;
+
+    if (!mounted) {
+      return true;
+    }
+
+    _syncAmountControllers(snapshot.page?.items ?? const []);
+
+    setState(() {
+      _years = snapshot.years;
+      _levels = snapshot.levels;
+      _classes = snapshot.classes;
+      _methods = snapshot.methods;
+      _page = snapshot.page;
+      _selectedYearId = snapshot.selectedYearId;
+      _selectedLevelId = snapshot.selectedLevelId;
+      _selectedClassId = snapshot.selectedClassId;
+      _selectedStatus = snapshot.selectedStatus;
+      _selectedMethod = snapshot.selectedMethod ??
+          (snapshot.methods.isNotEmpty ? snapshot.methods.first.name : null);
+      _loadingMeta = false;
+      _loadingClasses = false;
+      _loadingList = false;
+      _usingOfflineData = true;
+      _statusMessage = fallbackMessage;
+      _error = null;
+    });
+
+    return true;
+  }
+
+  Future<void> _writeSnapshot() async {
+    await _cacheStore.writeCacheDocument(
+      _feePaymentsCacheKey,
+      FeePaymentsOfflineSnapshot(
+        years: _years,
+        levels: _levels,
+        classes: _classes,
+        methods: _methods,
+        page: _page,
+        selectedYearId: _selectedYearId,
+        selectedLevelId: _selectedLevelId,
+        selectedClassId: _selectedClassId,
+        selectedStatus: _selectedStatus,
+        selectedMethod: _selectedMethod,
+        search: _searchController.text.trim(),
+        paymentDate: _paymentDateController.text.trim(),
+        reference: _referenceController.text.trim(),
+      ).toJson(),
+    );
   }
 
   Future<void> _submitPayment(FeeInvoiceListItem invoice) async {
@@ -559,6 +659,13 @@ class _FeePaymentsScreenState extends State<FeePaymentsScreen> {
                             ),
                           ),
                         ],
+                        if (_statusMessage != null) ...[
+                          const SizedBox(height: 12),
+                          _FeePaymentsOfflineBanner(
+                            message: _statusMessage!,
+                            onRetry: _usingOfflineData ? () => _loadMeta() : null,
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -667,7 +774,9 @@ class _FeePaymentsScreenState extends State<FeePaymentsScreen> {
               runSpacing: 12,
               children: [
                 FilledButton.icon(
-                  onPressed: isSubmitting ? null : () => _submitPayment(invoice),
+                  onPressed: isSubmitting || _usingOfflineData
+                      ? null
+                      : () => _submitPayment(invoice),
                   icon: const Icon(Icons.payments_outlined),
                   label: Text(isSubmitting ? 'Saving...' : 'Receive'),
                 ),
@@ -680,7 +789,9 @@ class _FeePaymentsScreenState extends State<FeePaymentsScreen> {
                   child: const Text('Full Amount'),
                 ),
                 OutlinedButton.icon(
-                  onPressed: () {
+                  onPressed: _usingOfflineData
+                      ? null
+                      : () {
                     Navigator.of(context).push(
                       MaterialPageRoute<void>(
                         builder: (_) => FeeInvoiceDetailScreen(
@@ -704,6 +815,41 @@ class _FeePaymentsScreenState extends State<FeePaymentsScreen> {
   }
 }
 
+class _FeePaymentsOfflineBanner extends StatelessWidget {
+  const _FeePaymentsOfflineBanner({
+    required this.message,
+    required this.onRetry,
+  });
+
+  final String message;
+  final Future<void> Function()? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFBEAE9),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.cloud_off_outlined, color: Color(0xFFB42318)),
+          const SizedBox(width: 10),
+          Expanded(child: Text(message)),
+          if (onRetry != null)
+            TextButton(
+              onPressed: () {
+                onRetry!();
+              },
+              child: const Text('Retry Online'),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 String _today() {
   final now = DateTime.now();
   final month = now.month.toString().padLeft(2, '0');
@@ -714,3 +860,5 @@ String _today() {
 String _formatMoney(num value) {
   return value.toStringAsFixed(2);
 }
+
+const _feePaymentsCacheKey = 'fee_payments_snapshot';

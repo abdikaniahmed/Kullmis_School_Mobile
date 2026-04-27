@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/fee_models.dart';
 import '../services/laravel_api.dart';
+import '../services/offline_cache_store.dart';
 
 class FeeStructuresScreen extends StatefulWidget {
   const FeeStructuresScreen({
@@ -18,11 +19,15 @@ class FeeStructuresScreen extends StatefulWidget {
 }
 
 class _FeeStructuresScreenState extends State<FeeStructuresScreen> {
+  final OfflineCacheStore _cacheStore = const FileOfflineCacheStore();
+
   List<AcademicYearOption> _years = const [];
   List<FeeStructureItem> _fees = const [];
   int? _selectedYearId;
   bool _loadingMeta = true;
   bool _loadingFees = false;
+  bool _usingOfflineData = false;
+  String? _statusMessage;
   String? _error;
 
   @override
@@ -35,6 +40,7 @@ class _FeeStructuresScreenState extends State<FeeStructuresScreen> {
     setState(() {
       _loadingMeta = true;
       _error = null;
+      _statusMessage = null;
     });
 
     try {
@@ -57,12 +63,22 @@ class _FeeStructuresScreenState extends State<FeeStructuresScreen> {
         _years = years;
         _selectedYearId = selectedYearId;
         _loadingMeta = false;
+        _usingOfflineData = false;
       });
 
       if (selectedYearId != null) {
         await _loadFees();
+      } else {
+        await _writeSnapshot();
       }
     } on ApiException catch (error) {
+      final restored = await _restoreSnapshot(
+        'Offline mode: showing last synced fee structures.',
+      );
+      if (restored) {
+        return;
+      }
+
       if (!mounted) {
         return;
       }
@@ -72,6 +88,13 @@ class _FeeStructuresScreenState extends State<FeeStructuresScreen> {
         _error = error.message;
       });
     } catch (_) {
+      final restored = await _restoreSnapshot(
+        'Offline mode: showing last synced fee structures.',
+      );
+      if (restored) {
+        return;
+      }
+
       if (!mounted) {
         return;
       }
@@ -89,12 +112,14 @@ class _FeeStructuresScreenState extends State<FeeStructuresScreen> {
       setState(() {
         _fees = const [];
       });
+      await _writeSnapshot();
       return;
     }
 
     setState(() {
       _loadingFees = true;
       _error = null;
+      _statusMessage = null;
     });
 
     try {
@@ -110,8 +135,17 @@ class _FeeStructuresScreenState extends State<FeeStructuresScreen> {
       setState(() {
         _fees = fees;
         _loadingFees = false;
+        _usingOfflineData = false;
       });
+      await _writeSnapshot();
     } on ApiException catch (error) {
+      final restored = await _restoreSnapshot(
+        'Offline mode: showing last synced fee structures.',
+      );
+      if (restored) {
+        return;
+      }
+
       if (!mounted) {
         return;
       }
@@ -122,6 +156,13 @@ class _FeeStructuresScreenState extends State<FeeStructuresScreen> {
         _error = error.message;
       });
     } catch (_) {
+      final restored = await _restoreSnapshot(
+        'Offline mode: showing last synced fee structures.',
+      );
+      if (restored) {
+        return;
+      }
+
       if (!mounted) {
         return;
       }
@@ -132,6 +173,43 @@ class _FeeStructuresScreenState extends State<FeeStructuresScreen> {
         _error = 'Unable to load fee structures.';
       });
     }
+  }
+
+  Future<bool> _restoreSnapshot(String fallbackMessage) async {
+    final json = await _cacheStore.readCacheDocument(_feeStructuresCacheKey);
+    if (json == null) {
+      return false;
+    }
+
+    final snapshot = FeeStructuresOfflineSnapshot.fromJson(json);
+
+    if (!mounted) {
+      return true;
+    }
+
+    setState(() {
+      _years = snapshot.years;
+      _selectedYearId = snapshot.selectedYearId;
+      _fees = snapshot.fees;
+      _loadingMeta = false;
+      _loadingFees = false;
+      _usingOfflineData = true;
+      _statusMessage = fallbackMessage;
+      _error = null;
+    });
+
+    return true;
+  }
+
+  Future<void> _writeSnapshot() async {
+    await _cacheStore.writeCacheDocument(
+      _feeStructuresCacheKey,
+      FeeStructuresOfflineSnapshot(
+        years: _years,
+        selectedYearId: _selectedYearId,
+        fees: _fees,
+      ).toJson(),
+    );
   }
 
   @override
@@ -191,6 +269,13 @@ class _FeeStructuresScreenState extends State<FeeStructuresScreen> {
                             style: theme.textTheme.bodyMedium?.copyWith(
                               color: const Color(0xFFB42318),
                             ),
+                          ),
+                        ],
+                        if (_statusMessage != null) ...[
+                          const SizedBox(height: 12),
+                          _OfflineBanner(
+                            message: _statusMessage!,
+                            onRetry: _usingOfflineData ? _loadMeta : null,
                           ),
                         ],
                       ],
@@ -303,6 +388,41 @@ class _FeeStructuresScreenState extends State<FeeStructuresScreen> {
   }
 }
 
+class _OfflineBanner extends StatelessWidget {
+  const _OfflineBanner({
+    required this.message,
+    required this.onRetry,
+  });
+
+  final String message;
+  final Future<void> Function()? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFBEAE9),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.cloud_off_outlined, color: Color(0xFFB42318)),
+          const SizedBox(width: 10),
+          Expanded(child: Text(message)),
+          if (onRetry != null)
+            TextButton(
+              onPressed: () {
+                onRetry!();
+              },
+              child: const Text('Retry Online'),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 class _StatChip extends StatelessWidget {
   const _StatChip({
     required this.label,
@@ -356,3 +476,5 @@ class _StatusBadge extends StatelessWidget {
 String _formatMoney(num value) {
   return value.toStringAsFixed(2);
 }
+
+const _feeStructuresCacheKey = 'fee_structures_snapshot';

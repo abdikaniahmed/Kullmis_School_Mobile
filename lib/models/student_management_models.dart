@@ -359,6 +359,15 @@ class StudentListReport {
           .toList(),
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'filter_label': filterLabel,
+      'generated_at': generatedAt,
+      'count': count,
+      'students': students.map((item) => item.toJson()).toList(),
+    };
+  }
 }
 
 class StudentReportRow {
@@ -393,6 +402,19 @@ class StudentReportRow {
       section: _toNullableString(json['section']),
       phone: _toNullableString(json['phone']),
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'roll_number': rollNumber,
+      'gender': gender,
+      'level_name': levelName,
+      'class_name': className,
+      'section': section,
+      'phone': phone,
+    };
   }
 }
 
