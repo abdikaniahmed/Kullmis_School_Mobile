@@ -9,10 +9,12 @@ import 'academic_years_screen.dart';
 import 'attendance_settings_screen.dart';
 import 'audit_logs_screen.dart';
 import 'backup_restore_screen.dart';
+import 'buses_screen.dart';
 import 'classes_screen.dart';
 import 'documents_screen.dart';
 import 'exam_mark_entry_screen.dart';
 import 'exam_report_screen.dart';
+import 'expenses_screen.dart';
 import 'fee_invoices_screen.dart';
 import 'fee_payments_screen.dart';
 import 'fee_structures_screen.dart';
@@ -21,6 +23,8 @@ import 'grade_setup_screen.dart';
 import 'levels_screen.dart';
 import 'main_attendance_screen.dart';
 import 'messaging_screen.dart';
+import 'payment_methods_screen.dart';
+import 'petty_cash_screen.dart';
 import 'promotions_screen.dart';
 import 'roles_screen.dart';
 import 'setup_config_screen.dart';
@@ -128,6 +132,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
   bool get _canViewAudits => widget.session.hasPermission('users.view');
 
+  bool get _canViewBuses => widget.session.hasAnyPermission(const [
+        'buses.view',
+        'buses.create',
+        'buses.edit',
+        'buses.assign',
+      ]);
+
   List<_ShellDestination> _destinations() {
     return <_ShellDestination>[
       _ShellDestination(
@@ -145,6 +156,14 @@ class _HomeScreenState extends State<HomeScreen> {
         builder: _buildStudentsPage,
         showChildren: true,
         sidebarChildren: _studentSidebarLinks(),
+      ),
+      _ShellDestination(
+        label: 'Transport',
+        icon: Icons.directions_bus_outlined,
+        selectedIcon: Icons.directions_bus,
+        builder: _buildTransportPage,
+        showChildren: true,
+        sidebarChildren: _transportSidebarLinks(),
       ),
       _ShellDestination(
         label: 'Reports',
@@ -433,7 +452,75 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     }
 
+    if (widget.session.hasPermission('expenses.view')) {
+      links.add(
+        _SidebarChildLink(
+          label: 'Expenses',
+          icon: Icons.receipt_outlined,
+          onPressed: () => _openScreen(
+            ExpensesScreen(
+              api: widget.api,
+              token: widget.session.token,
+              session: widget.session,
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (widget.session.hasPermission('petty_cash.view')) {
+      links.add(
+        _SidebarChildLink(
+          label: 'Petty Cash',
+          icon: Icons.account_balance_wallet_outlined,
+          onPressed: () => _openScreen(
+            PettyCashScreen(
+              api: widget.api,
+              token: widget.session.token,
+              session: widget.session,
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (widget.session.hasAnyPermission(const ['fees.pay', 'payments.edit'])) {
+      links.add(
+        _SidebarChildLink(
+          label: 'Payment Methods',
+          icon: Icons.credit_card_outlined,
+          onPressed: () => _openScreen(
+            PaymentMethodsScreen(
+              api: widget.api,
+              token: widget.session.token,
+              session: widget.session,
+            ),
+          ),
+        ),
+      );
+    }
+
     return links;
+  }
+
+  List<_SidebarChildLink> _transportSidebarLinks() {
+    if (!_canViewBuses) {
+      return const [];
+    }
+
+    return <_SidebarChildLink>[
+      _SidebarChildLink(
+        label: 'Buses',
+        icon: Icons.directions_bus_outlined,
+        onPressed: () => _openScreen(
+          BusesScreen(
+            api: widget.api,
+            token: widget.session.token,
+            session: widget.session,
+          ),
+        ),
+      ),
+    ];
   }
 
   List<_SidebarChildLink> _hrSidebarLinks() {
@@ -1051,6 +1138,16 @@ class _HomeScreenState extends State<HomeScreen> {
         borderRadius: BorderRadius.circular(20),
       ),
       child: child,
+    );
+  }
+
+  Widget _buildTransportPage() {
+    return _buildOverviewPage(
+      title: 'Transport',
+      description:
+          'Manage buses, assign students, and track transport coverage across the school.',
+      modules: _transportSidebarLinks().map((link) => link.label).toList(),
+      emptyMessage: 'No transport modules are available for this account yet.',
     );
   }
 

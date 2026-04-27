@@ -9,6 +9,7 @@ import '../models/backup_models.dart';
 import '../models/discipline_incident_models.dart';
 import '../models/dashboard_data.dart';
 import '../models/exam_models.dart';
+import '../models/finance_admin_models.dart';
 import '../models/fee_models.dart';
 import '../models/hr_models.dart';
 import '../models/main_attendance_models.dart';
@@ -18,6 +19,7 @@ import '../models/student_management_models.dart';
 import '../models/student_list_models.dart';
 import '../models/subject_attendance_models.dart';
 import '../models/task_models.dart';
+import '../models/transport_models.dart';
 
 class LaravelApi {
   static const _configuredBaseUrl = String.fromEnvironment('API_BASE_URL');
@@ -1698,6 +1700,414 @@ class LaravelApi {
         .whereType<Map<String, dynamic>>()
         .map(FeePaymentMethod.fromJson)
         .toList();
+  }
+
+  Future<List<PaymentMethodAdminItem>> paymentMethods({
+    required String token,
+    bool includeInactive = false,
+  }) async {
+    final uri = Uri.parse('$baseUrl/school/fees/payment-methods').replace(
+      queryParameters: includeInactive ? {'include_inactive': '1'} : null,
+    );
+
+    final response = await _client.get(
+      uri,
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    final data = payload['data'] as List<dynamic>? ?? const [];
+    return data
+        .whereType<Map<String, dynamic>>()
+        .map(PaymentMethodAdminItem.fromJson)
+        .toList();
+  }
+
+  Future<PaymentMethodAdminItem> createPaymentMethod({
+    required String token,
+    required Map<String, dynamic> payload,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$baseUrl/school/fees/payment-methods'),
+      headers: _headers(token: token, jsonRequest: true),
+      body: jsonEncode(payload),
+    );
+
+    final decoded = _decode(response);
+    _throwIfNeeded(response, decoded);
+
+    final data = decoded['data'];
+    if (data is Map<String, dynamic>) {
+      return PaymentMethodAdminItem.fromJson(data);
+    }
+
+    return PaymentMethodAdminItem.fromJson(decoded);
+  }
+
+  Future<PaymentMethodAdminItem> updatePaymentMethod({
+    required String token,
+    required int paymentMethodId,
+    required Map<String, dynamic> payload,
+  }) async {
+    final response = await _client.put(
+      Uri.parse('$baseUrl/school/fees/payment-methods/$paymentMethodId'),
+      headers: _headers(token: token, jsonRequest: true),
+      body: jsonEncode(payload),
+    );
+
+    final decoded = _decode(response);
+    _throwIfNeeded(response, decoded);
+
+    final data = decoded['data'];
+    if (data is Map<String, dynamic>) {
+      return PaymentMethodAdminItem.fromJson(data);
+    }
+
+    return PaymentMethodAdminItem.fromJson(decoded);
+  }
+
+  Future<void> deletePaymentMethod({
+    required String token,
+    required int paymentMethodId,
+  }) async {
+    final response = await _client.delete(
+      Uri.parse('$baseUrl/school/fees/payment-methods/$paymentMethodId'),
+      headers: _headers(token: token),
+    );
+
+    final decoded = _decode(response);
+    _throwIfNeeded(response, decoded);
+  }
+
+  Future<ExpenseListPayload> expenses({
+    required String token,
+    String? search,
+    String? category,
+    String? dateFrom,
+    String? dateTo,
+  }) async {
+    final queryParameters = <String, String>{};
+
+    if (search != null && search.trim().isNotEmpty) {
+      queryParameters['search'] = search.trim();
+    }
+
+    if (category != null && category.trim().isNotEmpty) {
+      queryParameters['category'] = category.trim();
+    }
+
+    if (dateFrom != null && dateFrom.trim().isNotEmpty) {
+      queryParameters['date_from'] = dateFrom.trim();
+    }
+
+    if (dateTo != null && dateTo.trim().isNotEmpty) {
+      queryParameters['date_to'] = dateTo.trim();
+    }
+
+    final uri = Uri.parse('$baseUrl/school/fees/expenses').replace(
+      queryParameters: queryParameters.isEmpty ? null : queryParameters,
+    );
+
+    final response = await _client.get(
+      uri,
+      headers: _headers(token: token),
+    );
+
+    final decoded = _decode(response);
+    _throwIfNeeded(response, decoded);
+
+    return ExpenseListPayload.fromJson(decoded);
+  }
+
+  Future<ExpenseItem> createExpense({
+    required String token,
+    required Map<String, dynamic> payload,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$baseUrl/school/fees/expenses'),
+      headers: _headers(token: token, jsonRequest: true),
+      body: jsonEncode(payload),
+    );
+
+    final decoded = _decode(response);
+    _throwIfNeeded(response, decoded);
+
+    final data = decoded['data'];
+    if (data is Map<String, dynamic>) {
+      return ExpenseItem.fromJson(data);
+    }
+
+    return ExpenseItem.fromJson(decoded);
+  }
+
+  Future<ExpenseItem> updateExpense({
+    required String token,
+    required int expenseId,
+    required Map<String, dynamic> payload,
+  }) async {
+    final response = await _client.put(
+      Uri.parse('$baseUrl/school/fees/expenses/$expenseId'),
+      headers: _headers(token: token, jsonRequest: true),
+      body: jsonEncode(payload),
+    );
+
+    final decoded = _decode(response);
+    _throwIfNeeded(response, decoded);
+
+    final data = decoded['data'];
+    if (data is Map<String, dynamic>) {
+      return ExpenseItem.fromJson(data);
+    }
+
+    return ExpenseItem.fromJson(decoded);
+  }
+
+  Future<void> deleteExpense({
+    required String token,
+    required int expenseId,
+  }) async {
+    final response = await _client.delete(
+      Uri.parse('$baseUrl/school/fees/expenses/$expenseId'),
+      headers: _headers(token: token),
+    );
+
+    final decoded = _decode(response);
+    _throwIfNeeded(response, decoded);
+  }
+
+  Future<PettyCashListPayload> pettyCashBudgets({
+    required String token,
+    String? status,
+  }) async {
+    final uri = Uri.parse('$baseUrl/school/fees/petty-cash/budgets').replace(
+      queryParameters: status == null || status.trim().isEmpty
+          ? null
+          : {'status': status.trim()},
+    );
+
+    final response = await _client.get(
+      uri,
+      headers: _headers(token: token),
+    );
+
+    final decoded = _decode(response);
+    _throwIfNeeded(response, decoded);
+
+    return PettyCashListPayload.fromJson(decoded);
+  }
+
+  Future<PettyCashBudgetItem> createPettyCashBudget({
+    required String token,
+    required Map<String, dynamic> payload,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$baseUrl/school/fees/petty-cash/budgets'),
+      headers: _headers(token: token, jsonRequest: true),
+      body: jsonEncode(payload),
+    );
+
+    final decoded = _decode(response);
+    _throwIfNeeded(response, decoded);
+
+    final data = decoded['data'];
+    if (data is Map<String, dynamic>) {
+      return PettyCashBudgetItem.fromJson(data);
+    }
+
+    return PettyCashBudgetItem.fromJson(decoded);
+  }
+
+  Future<PettyCashBudgetItem> updatePettyCashBudget({
+    required String token,
+    required int budgetId,
+    required Map<String, dynamic> payload,
+  }) async {
+    final response = await _client.put(
+      Uri.parse('$baseUrl/school/fees/petty-cash/budgets/$budgetId'),
+      headers: _headers(token: token, jsonRequest: true),
+      body: jsonEncode(payload),
+    );
+
+    final decoded = _decode(response);
+    _throwIfNeeded(response, decoded);
+
+    final data = decoded['data'];
+    if (data is Map<String, dynamic>) {
+      return PettyCashBudgetItem.fromJson(data);
+    }
+
+    return PettyCashBudgetItem.fromJson(decoded);
+  }
+
+  Future<void> deletePettyCashBudget({
+    required String token,
+    required int budgetId,
+  }) async {
+    final response = await _client.delete(
+      Uri.parse('$baseUrl/school/fees/petty-cash/budgets/$budgetId'),
+      headers: _headers(token: token),
+    );
+
+    final decoded = _decode(response);
+    _throwIfNeeded(response, decoded);
+  }
+
+  Future<PettyCashTransactionItem> topUpPettyCashBudget({
+    required String token,
+    required int budgetId,
+    required Map<String, dynamic> payload,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$baseUrl/school/fees/petty-cash/budgets/$budgetId/top-ups'),
+      headers: _headers(token: token, jsonRequest: true),
+      body: jsonEncode(payload),
+    );
+
+    final decoded = _decode(response);
+    _throwIfNeeded(response, decoded);
+
+    final data = decoded['data'];
+    if (data is Map<String, dynamic>) {
+      return PettyCashTransactionItem.fromJson(data);
+    }
+
+    return PettyCashTransactionItem.fromJson(decoded);
+  }
+
+  Future<List<PettyCashTransactionItem>> pettyCashTransactions({
+    required String token,
+    required int budgetId,
+  }) async {
+    final response = await _client.get(
+      Uri.parse('$baseUrl/school/fees/petty-cash/budgets/$budgetId/transactions'),
+      headers: _headers(token: token),
+    );
+
+    final decoded = _decode(response);
+    _throwIfNeeded(response, decoded);
+
+    final data = decoded['data'] as List<dynamic>? ?? const [];
+    return data
+        .whereType<Map<String, dynamic>>()
+        .map(PettyCashTransactionItem.fromJson)
+        .toList();
+  }
+
+  Future<List<BusItem>> buses({
+    required String token,
+  }) async {
+    final response = await _client.get(
+      Uri.parse('$baseUrl/school/buses'),
+      headers: _headers(token: token),
+    );
+
+    final data = _decodeList(response);
+    return data
+        .whereType<Map<String, dynamic>>()
+        .map(BusItem.fromJson)
+        .toList();
+  }
+
+  Future<BusItem> createBus({
+    required String token,
+    required Map<String, dynamic> payload,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$baseUrl/school/buses'),
+      headers: _headers(token: token, jsonRequest: true),
+      body: jsonEncode(payload),
+    );
+
+    final decoded = _decode(response);
+    _throwIfNeeded(response, decoded);
+
+    return BusItem.fromJson(decoded);
+  }
+
+  Future<BusItem> updateBus({
+    required String token,
+    required int busId,
+    required Map<String, dynamic> payload,
+  }) async {
+    final response = await _client.put(
+      Uri.parse('$baseUrl/school/buses/$busId'),
+      headers: _headers(token: token, jsonRequest: true),
+      body: jsonEncode(payload),
+    );
+
+    final decoded = _decode(response);
+    _throwIfNeeded(response, decoded);
+
+    return BusItem.fromJson(decoded);
+  }
+
+  Future<void> deleteBus({
+    required String token,
+    required int busId,
+  }) async {
+    final response = await _client.delete(
+      Uri.parse('$baseUrl/school/buses/$busId'),
+      headers: _headers(token: token),
+    );
+
+    if (response.statusCode == 204) {
+      return;
+    }
+
+    final decoded = _decode(response);
+    _throwIfNeeded(response, decoded);
+  }
+
+  Future<List<BusStudentItem>> busStudents({
+    required String token,
+    required int busId,
+  }) async {
+    final response = await _client.get(
+      Uri.parse('$baseUrl/school/buses/$busId/students'),
+      headers: _headers(token: token),
+    );
+
+    final data = _decodeList(response);
+    return data
+        .whereType<Map<String, dynamic>>()
+        .map(BusStudentItem.fromJson)
+        .toList();
+  }
+
+  Future<void> assignBusStudents({
+    required String token,
+    required int busId,
+    required List<int> studentIds,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$baseUrl/school/buses/$busId/assign'),
+      headers: _headers(token: token, jsonRequest: true),
+      body: jsonEncode({'students': studentIds}),
+    );
+
+    final decoded = _decode(response);
+    _throwIfNeeded(response, decoded);
+  }
+
+  Future<BusStudentReport> busStudentReport({
+    required String token,
+    int? busId,
+  }) async {
+    final uri = Uri.parse('$baseUrl/school/buses/report/students').replace(
+      queryParameters: busId == null ? null : {'bus_id': '$busId'},
+    );
+
+    final response = await _client.get(
+      uri,
+      headers: _headers(token: token),
+    );
+
+    final decoded = _decode(response);
+    _throwIfNeeded(response, decoded);
+
+    return BusStudentReport.fromJson(decoded);
   }
 
   Future<FeePaymentResult> createFeePayment({
