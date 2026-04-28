@@ -165,9 +165,10 @@ class _SessionGateState extends State<SessionGate> {
       _dashboard = dashboard;
       _usingOfflineData = false;
       _isServerReachable = true;
-      _statusMessage = syncResult.flushedCount > 0
-          ? 'Synced ${syncResult.flushedCount} pending offline changes.'
-          : null;
+      _statusMessage = _syncStatusMessage(
+        syncResult: syncResult,
+        emptySyncMessage: null,
+      );
     });
   }
 
@@ -277,9 +278,10 @@ class _SessionGateState extends State<SessionGate> {
         _dashboard = dashboard;
         _usingOfflineData = false;
         _isServerReachable = true;
-        _statusMessage = syncResult.flushedCount > 0
-            ? 'Synced ${syncResult.flushedCount} pending offline changes.'
-            : emptySyncMessage;
+        _statusMessage = _syncStatusMessage(
+          syncResult: syncResult,
+          emptySyncMessage: emptySyncMessage,
+        );
       });
     } on ApiException catch (_) {
       final cachedDashboard = await widget.offlineCacheStore.readDashboard();
@@ -341,6 +343,25 @@ class _SessionGateState extends State<SessionGate> {
         const BootstrapResult(error: 'You have been signed out.'),
       );
     });
+  }
+
+  String? _syncStatusMessage({
+    required OfflineSyncResult syncResult,
+    required String? emptySyncMessage,
+  }) {
+    if (syncResult.issueCount > 0 && syncResult.flushedCount > 0) {
+      return 'Synced ${syncResult.flushedCount} changes. ${syncResult.issueCount} need review.';
+    }
+
+    if (syncResult.issueCount > 0) {
+      return '${syncResult.issueCount} queued changes need review before they can sync.';
+    }
+
+    if (syncResult.flushedCount > 0) {
+      return 'Synced ${syncResult.flushedCount} pending offline changes.';
+    }
+
+    return emptySyncMessage;
   }
 
   @override

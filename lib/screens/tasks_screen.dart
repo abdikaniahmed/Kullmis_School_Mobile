@@ -42,6 +42,8 @@ class _TasksScreenState extends State<TasksScreen> {
   String _relatedTypeFilter = '';
   int? _assignedToFilter;
   List<int> _pendingCompleteIds = const [];
+  List<int> _pendingCreateIds = const [];
+  List<int> _pendingUpdateIds = const [];
 
   bool get _canCreate => widget.session.hasPermission('tasks.create');
   bool get _canEdit => widget.session.hasPermission('tasks.edit');
@@ -79,20 +81,22 @@ class _TasksScreenState extends State<TasksScreen> {
         search: _searchController.text.trim(),
       );
 
-      final pendingCompletes = await _loadPendingCompleteIds();
+      final pendingState = await _loadPendingTaskQueueState();
 
       if (!mounted) {
         return;
       }
 
       setState(() {
-        _payload = _applyPendingCompletesToPayload(payload, pendingCompletes);
-        _pendingCompleteIds = pendingCompletes;
+        _payload = _applyPendingQueueStateToPayload(payload, pendingState);
+        _pendingCompleteIds = pendingState.completeIds;
+        _pendingCreateIds = pendingState.createdIds;
+        _pendingUpdateIds = pendingState.updatedIds;
         _loading = false;
         _usingOfflineData = false;
-        _statusMessage = pendingCompletes.isEmpty
-            ? null
-            : 'Some task completions are still queued for sync.';
+        _statusMessage = pendingState.hasPendingWork
+            ? 'Some task changes are still queued for sync.'
+            : null;
       });
 
       await _writeSnapshot();
@@ -131,32 +135,81 @@ class _TasksScreenState extends State<TasksScreen> {
     }
   }
 
-  Future<List<int>> _loadPendingCompleteIds() async {
+  Future<_PendingTaskQueueState> _loadPendingTaskQueueState() async {
     final queued = await _syncQueue.readQueue();
-    return queued
-        .where((item) => item.key.startsWith(taskCompleteQueuePrefix))
-        .map((item) => _toInt(item.payload['task_id']))
-        .where((id) => id > 0)
-        .toList()
-      ..sort();
+    final createdTasks = <TaskItem>[];
+    final updatedTasks = <TaskItem>[];
+    final deletedIds = <int>[];
+    final completeIds = <int>[];
+
+    for (final item in queued) {
+      if (item.key.startsWith(taskCreateQueuePrefix)) {
+        final taskJson = item.payload['task'];
+        if (taskJson is Map<String, dynamic>) {
+          createdTasks.add(TaskItem.fromJson(taskJson));
+        }
+      } else if (item.key.startsWith(taskUpdateQueuePrefix)) {
+        final taskJson = item.payload['task'];
+        if (taskJson is Map<String, dynamic>) {
+          updatedTasks.add(TaskItem.fromJson(taskJson));
+        }
+      } else if (item.key.startsWith(taskDeleteQueuePrefix)) {
+        final id = _toInt(item.payload['task_id']);
+        if (id != 0) {
+          deletedIds.add(id);
+        }
+      } else if (item.key.startsWith(taskCompleteQueuePrefix)) {
+        final id = _toInt(item.payload['task_id']);
+        if (id > 0) {
+          completeIds.add(id);
+        }
+      }
+    }
+
+    return _PendingTaskQueueState(
+      createdTasks: createdTasks,
+      updatedTasks: updatedTasks,
+      deletedIds: deletedIds..sort(),
+      completeIds: completeIds..sort(),
+    );
   }
 
-  TaskIndexPayload _applyPendingCompletesToPayload(
+  TaskIndexPayload _applyPendingQueueStateToPayload(
     TaskIndexPayload payload,
-    List<int> pendingCompletes,
+    _PendingTaskQueueState pendingState,
   ) {
-    if (pendingCompletes.isEmpty) {
+    if (!pendingState.hasPendingWork) {
       return payload;
     }
 
-    return TaskIndexPayload(
-      items: payload.items.map((task) {
-        if (!pendingCompletes.contains(task.id)) {
-          return task;
-        }
+    final items = payload.items.map((task) {
+      final updated = pendingState.updatedTasks
+          .where((item) => item.id == task.id)
+          .firstOrNull;
+      final base = updated ?? task;
 
-        return task.copyWith(status: 'completed');
-      }).toList(),
+      if (pendingState.deletedIds.contains(base.id)) {
+        return null;
+      }
+
+      if (!pendingState.completeIds.contains(base.id)) {
+        return base;
+      }
+
+      return base.copyWith(status: 'completed');
+    }).whereType<TaskItem>().toList();
+
+    for (final task in pendingState.createdTasks) {
+      final existingIndex = items.indexWhere((item) => item.id == task.id);
+      if (existingIndex >= 0) {
+        items[existingIndex] = task;
+      } else {
+        items.insert(0, task);
+      }
+    }
+
+    return TaskIndexPayload(
+      items: items,
       filters: payload.filters,
     );
   }
@@ -180,6 +233,8 @@ class _TasksScreenState extends State<TasksScreen> {
       return false;
     }
 
+    final pendingState = await _loadPendingTaskQueueState();
+
     if (!mounted) {
       return true;
     }
@@ -187,11 +242,19 @@ class _TasksScreenState extends State<TasksScreen> {
     _searchController.text = snapshot.search;
 
     setState(() {
-      _payload = _applyPendingCompletesToPayload(
+      _payload = _applyPendingQueueStateToPayload(
         snapshot.payload,
-        snapshot.pendingCompletes,
+        pendingState.copyWith(
+          completeIds: pendingState.completeIds.isEmpty
+              ? snapshot.pendingCompletes
+              : pendingState.completeIds,
+        ),
       );
-      _pendingCompleteIds = snapshot.pendingCompletes;
+      _pendingCompleteIds = pendingState.completeIds.isEmpty
+          ? snapshot.pendingCompletes
+          : pendingState.completeIds;
+      _pendingCreateIds = pendingState.createdIds;
+      _pendingUpdateIds = pendingState.updatedIds;
       _statusFilter = snapshot.statusFilter;
       _typeFilter = snapshot.typeFilter;
       _priorityFilter = snapshot.priorityFilter;
@@ -200,9 +263,9 @@ class _TasksScreenState extends State<TasksScreen> {
       _assignedToFilter = snapshot.assignedToFilter;
       _loading = false;
       _usingOfflineData = true;
-      _statusMessage = snapshot.pendingCompletes.isEmpty
-          ? fallbackMessage
-          : 'Offline mode: showing cached tasks with queued completions.';
+      _statusMessage = pendingState.hasPendingWork || snapshot.pendingCompletes.isNotEmpty
+          ? 'Offline mode: showing cached tasks with queued local changes.'
+          : fallbackMessage;
       _error = null;
     });
 
@@ -283,6 +346,29 @@ class _TasksScreenState extends State<TasksScreen> {
       return;
     }
 
+    if (task.id < 0) {
+      await _queueOfflineTaskSave(
+        originalTask: task,
+        payload: {
+          'title': task.title,
+          'description': task.description,
+          'type': task.type,
+          'status': 'completed',
+          'priority': task.priority,
+          'due_at': task.dueAt,
+          'assigned_to': task.assignee?.id,
+          'visibility': task.visibility,
+          'related_kind': task.relatedKind,
+          'related_id': task.related?.id,
+        },
+        assignedTo: task.assignee?.id,
+        relatedKind: task.relatedKind ?? '',
+        relatedId: task.related?.id,
+        dueAtInput: task.dueAt?.replaceFirst('T', ' ') ?? '',
+      );
+      return;
+    }
+
     try {
       await widget.api.completeTask(
         token: widget.token,
@@ -332,7 +418,15 @@ class _TasksScreenState extends State<TasksScreen> {
     }
 
     setState(() {
-      _payload = _applyPendingCompletesToPayload(payload, pending);
+      _payload = _applyPendingQueueStateToPayload(
+        payload,
+        _PendingTaskQueueState(
+          createdTasks: const [],
+          updatedTasks: const [],
+          deletedIds: const [],
+          completeIds: pending,
+        ),
+      );
       _pendingCompleteIds = pending;
       _usingOfflineData = true;
       _statusMessage = 'Task completion saved locally and queued for sync.';
@@ -397,6 +491,7 @@ class _TasksScreenState extends State<TasksScreen> {
         token: widget.token,
         taskId: task.id,
       );
+      await _syncQueue.remove('$taskDeleteQueuePrefix${task.id}');
 
       if (!mounted) {
         return;
@@ -404,22 +499,220 @@ class _TasksScreenState extends State<TasksScreen> {
 
       await _loadTasks();
     } on ApiException catch (error) {
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        _error = error.message;
-      });
+      await _queueOfflineDelete(task, fallbackMessage: error.message);
     } catch (_) {
+      await _queueOfflineDelete(task);
+    }
+  }
+
+  Future<void> _queueOfflineDelete(
+    TaskItem task, {
+    String? fallbackMessage,
+  }) async {
+    final currentPayload = _payload;
+    if (currentPayload == null) {
       if (!mounted) {
         return;
       }
 
       setState(() {
-        _error = 'Unable to delete task.';
+        _error = fallbackMessage ?? 'Unable to delete task.';
       });
+      return;
     }
+
+    if (task.id < 0) {
+      await _syncQueue.remove('$taskCreateQueuePrefix${task.id}');
+    } else {
+      await _syncQueue.upsert(
+        OfflineSyncOperation(
+          key: '$taskDeleteQueuePrefix${task.id}',
+          type: 'task_delete',
+          payload: {
+            'task_id': task.id,
+          },
+          createdAt: DateTime.now().toIso8601String(),
+        ),
+      );
+      await _syncQueue.remove('$taskUpdateQueuePrefix${task.id}');
+      await _syncQueue.remove('$taskCompleteQueuePrefix${task.id}');
+    }
+
+    final nextItems =
+        currentPayload.items.where((item) => item.id != task.id).toList();
+    final pendingState = await _loadPendingTaskQueueState();
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _payload = _applyPendingQueueStateToPayload(
+        TaskIndexPayload(items: nextItems, filters: currentPayload.filters),
+        pendingState,
+      );
+      _pendingCompleteIds = pendingState.completeIds;
+      _pendingCreateIds = pendingState.createdIds;
+      _pendingUpdateIds = pendingState.updatedIds;
+      _usingOfflineData = true;
+      _statusMessage = 'Task deletion saved locally and queued for sync.';
+      _error = null;
+    });
+
+    await _writeSnapshot();
+
+    if (!mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        const SnackBar(
+          content: Text('Task deletion saved locally for later sync.'),
+        ),
+      );
+  }
+
+  Future<bool> _queueOfflineTaskSave({
+    required TaskItem? originalTask,
+    required Map<String, dynamic> payload,
+    required int? assignedTo,
+    required String relatedKind,
+    required int? relatedId,
+    required String dueAtInput,
+  }) async {
+    final currentPayload = _payload;
+    final filters = currentPayload?.filters;
+    if (currentPayload == null || filters == null) {
+      return false;
+    }
+
+    final localTask = _buildLocalTask(
+      originalTask: originalTask,
+      payload: payload,
+      filters: filters,
+      assignedTo: assignedTo,
+      relatedKind: relatedKind,
+      relatedId: relatedId,
+      dueAtInput: dueAtInput,
+    );
+
+    if (originalTask == null || originalTask.id < 0) {
+      await _syncQueue.upsert(
+        OfflineSyncOperation(
+          key: '$taskCreateQueuePrefix${localTask.id}',
+          type: 'task_create',
+          payload: {
+            'task': localTask.toJson(),
+            'payload': payload,
+          },
+          createdAt: DateTime.now().toIso8601String(),
+        ),
+      );
+    } else {
+      await _syncQueue.upsert(
+        OfflineSyncOperation(
+          key: '$taskUpdateQueuePrefix${localTask.id}',
+          type: 'task_update',
+          payload: {
+            'task_id': localTask.id,
+            'task': localTask.toJson(),
+            'payload': payload,
+          },
+          createdAt: DateTime.now().toIso8601String(),
+        ),
+      );
+    }
+
+    final pendingState = await _loadPendingTaskQueueState();
+    final nextItems = [
+      for (final item in currentPayload.items)
+        if (item.id != localTask.id) item,
+      localTask,
+    ];
+
+    if (!mounted) {
+      return true;
+    }
+
+    setState(() {
+      _payload = _applyPendingQueueStateToPayload(
+        TaskIndexPayload(items: nextItems, filters: currentPayload.filters),
+        pendingState,
+      );
+      _pendingCompleteIds = pendingState.completeIds;
+      _pendingCreateIds = pendingState.createdIds;
+      _pendingUpdateIds = pendingState.updatedIds;
+      _usingOfflineData = true;
+      _statusMessage = originalTask == null
+          ? 'Task saved locally and queued for sync.'
+          : 'Task update saved locally and queued for sync.';
+      _error = null;
+    });
+
+    await _writeSnapshot();
+
+    if (!mounted) {
+      return true;
+    }
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            originalTask == null
+                ? 'Task created locally for later sync.'
+                : 'Task update saved locally for later sync.',
+          ),
+        ),
+      );
+
+    return true;
+  }
+
+  TaskItem _buildLocalTask({
+    required TaskItem? originalTask,
+    required Map<String, dynamic> payload,
+    required TaskFilterOptions filters,
+    required int? assignedTo,
+    required String relatedKind,
+    required int? relatedId,
+    required String dueAtInput,
+  }) {
+    final normalizedRelatedKind = relatedKind.trim().isEmpty ? null : relatedKind;
+    final localId = originalTask?.id ?? -DateTime.now().millisecondsSinceEpoch;
+    final assignee = filters.assignees
+        .where((option) => option.id == assignedTo)
+        .firstOrNull;
+    final related = normalizedRelatedKind == 'student'
+        ? filters.students.where((option) => option.id == relatedId).firstOrNull
+        : normalizedRelatedKind == 'staff'
+            ? filters.staffs.where((option) => option.id == relatedId).firstOrNull
+            : null;
+    final dueAt = dueAtInput.trim().isEmpty
+        ? null
+        : dueAtInput.trim().replaceFirst(' ', 'T');
+
+    return TaskItem(
+      id: localId,
+      title: '${payload['title'] ?? ''}'.trim(),
+      description: payload['description'] as String?,
+      type: '${payload['type'] ?? 'general'}',
+      status: '${payload['status'] ?? 'pending'}',
+      priority: '${payload['priority'] ?? 'medium'}',
+      visibility: '${payload['visibility'] ?? 'school'}',
+      dueAt: dueAt,
+      completedAt: '${payload['status'] ?? ''}' == 'completed'
+          ? DateTime.now().toIso8601String()
+          : originalTask?.completedAt,
+      createdAt: originalTask?.createdAt ?? DateTime.now().toIso8601String(),
+      creator: originalTask?.creator,
+      assignee: assignee,
+      relatedKind: normalizedRelatedKind,
+      related: related,
+    );
   }
 
   Future<void> _openTaskDialog({TaskItem? task}) async {
@@ -746,29 +1039,29 @@ class _TasksScreenState extends State<TasksScreen> {
                             _saving = true;
                           });
 
-                          try {
-                            final payload = <String, dynamic>{
-                              'title': title,
-                              'description':
-                                  descriptionController.text.trim().isEmpty
-                                      ? null
-                                      : descriptionController.text.trim(),
-                              'type': type,
-                              'status': status,
-                              'priority': priority,
-                              'due_at': dueAtController.text.trim().isEmpty
-                                  ? null
-                                  : dueAtController.text.trim().replaceFirst(
-                                        ' ',
-                                        'T',
-                                      ),
-                              'assigned_to': assignedTo,
-                              'visibility': visibility,
-                              'related_kind':
-                                  relatedKind.isEmpty ? null : relatedKind,
-                              'related_id': relatedId,
-                            };
+                          final payload = <String, dynamic>{
+                            'title': title,
+                            'description':
+                                descriptionController.text.trim().isEmpty
+                                    ? null
+                                    : descriptionController.text.trim(),
+                            'type': type,
+                            'status': status,
+                            'priority': priority,
+                            'due_at': dueAtController.text.trim().isEmpty
+                                ? null
+                                : dueAtController.text.trim().replaceFirst(
+                                      ' ',
+                                      'T',
+                                    ),
+                            'assigned_to': assignedTo,
+                            'visibility': visibility,
+                            'related_kind':
+                                relatedKind.isEmpty ? null : relatedKind,
+                            'related_id': relatedId,
+                          };
 
+                          try {
                             if (task == null) {
                               await widget.api.createTask(
                                 token: widget.token,
@@ -789,15 +1082,45 @@ class _TasksScreenState extends State<TasksScreen> {
                             Navigator.of(context).pop();
                             await _loadTasks();
                           } on ApiException catch (error) {
-                            setDialogState(() {
-                              localSaving = false;
-                              dialogError = error.message;
-                            });
+                            final queued = await _queueOfflineTaskSave(
+                              originalTask: task,
+                              payload: payload,
+                              assignedTo: assignedTo,
+                              relatedKind: relatedKind,
+                              relatedId: relatedId,
+                              dueAtInput: dueAtController.text.trim(),
+                            );
+                            if (!context.mounted) {
+                              return;
+                            }
+                            if (queued) {
+                              Navigator.of(context).pop();
+                            } else {
+                              setDialogState(() {
+                                localSaving = false;
+                                dialogError = error.message;
+                              });
+                            }
                           } catch (_) {
-                            setDialogState(() {
-                              localSaving = false;
-                              dialogError = 'Unable to save task.';
-                            });
+                            final queued = await _queueOfflineTaskSave(
+                              originalTask: task,
+                              payload: payload,
+                              assignedTo: assignedTo,
+                              relatedKind: relatedKind,
+                              relatedId: relatedId,
+                              dueAtInput: dueAtController.text.trim(),
+                            );
+                            if (!context.mounted) {
+                              return;
+                            }
+                            if (queued) {
+                              Navigator.of(context).pop();
+                            } else {
+                              setDialogState(() {
+                                localSaving = false;
+                                dialogError = 'Unable to save task.';
+                              });
+                            }
                           } finally {
                             if (mounted) {
                               setState(() {
@@ -1078,7 +1401,9 @@ class _TasksScreenState extends State<TasksScreen> {
                     ? '${task.related!.name} (${_labelize(task.relatedKind ?? '')})'
                     : 'General',
               ),
-              if (_pendingCompleteIds.contains(task.id))
+              if (_pendingCreateIds.contains(task.id) ||
+                  _pendingUpdateIds.contains(task.id) ||
+                  _pendingCompleteIds.contains(task.id))
                 const _InfoChip(label: 'Pending Sync'),
             ],
           ),
@@ -1223,6 +1548,43 @@ class _SummaryCard extends StatelessWidget {
 }
 
 const _tasksCacheKey = 'tasks_snapshot';
+
+class _PendingTaskQueueState {
+  const _PendingTaskQueueState({
+    required this.createdTasks,
+    required this.updatedTasks,
+    required this.deletedIds,
+    required this.completeIds,
+  });
+
+  final List<TaskItem> createdTasks;
+  final List<TaskItem> updatedTasks;
+  final List<int> deletedIds;
+  final List<int> completeIds;
+
+  List<int> get createdIds => createdTasks.map((item) => item.id).toList()..sort();
+  List<int> get updatedIds => updatedTasks.map((item) => item.id).toList()..sort();
+
+  bool get hasPendingWork =>
+      createdTasks.isNotEmpty ||
+      updatedTasks.isNotEmpty ||
+      deletedIds.isNotEmpty ||
+      completeIds.isNotEmpty;
+
+  _PendingTaskQueueState copyWith({
+    List<TaskItem>? createdTasks,
+    List<TaskItem>? updatedTasks,
+    List<int>? deletedIds,
+    List<int>? completeIds,
+  }) {
+    return _PendingTaskQueueState(
+      createdTasks: createdTasks ?? this.createdTasks,
+      updatedTasks: updatedTasks ?? this.updatedTasks,
+      deletedIds: deletedIds ?? this.deletedIds,
+      completeIds: completeIds ?? this.completeIds,
+    );
+  }
+}
 
 extension<T> on Iterable<T> {
   T? get firstOrNull => isEmpty ? null : first;

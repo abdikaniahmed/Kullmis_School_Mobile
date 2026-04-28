@@ -180,11 +180,6 @@ class _StudentDetailScreenState extends State<StudentDetailScreen> {
   }
 
   Future<void> _openIncidentRecorder() async {
-    if (_usingOfflineData) {
-      _showMessage('Reconnect to record a new incident.');
-      return;
-    }
-
     final created = await Navigator.of(context).push<bool>(
       MaterialPageRoute<bool>(
         builder: (_) => StudentIncidentRecordScreen(
@@ -197,6 +192,11 @@ class _StudentDetailScreenState extends State<StudentDetailScreen> {
     );
 
     if (created == true && mounted && _canViewIncidentReport) {
+      if (_usingOfflineData) {
+        _showMessage('Incident queued offline. It will sync when the server is reachable.');
+        return;
+      }
+
       await _loadData(reportOnly: true);
     }
   }

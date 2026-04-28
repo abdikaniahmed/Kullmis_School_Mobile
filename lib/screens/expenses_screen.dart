@@ -4,6 +4,7 @@ import '../models/auth_session.dart';
 import '../models/finance_admin_models.dart';
 import '../services/laravel_api.dart';
 import '../services/offline_cache_store.dart';
+import '../services/offline_sync_queue.dart';
 
 class ExpensesScreen extends StatefulWidget {
   const ExpensesScreen({
@@ -27,10 +28,12 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
   final TextEditingController _dateFromController = TextEditingController();
   final TextEditingController _dateToController = TextEditingController();
   final OfflineCacheStore _cacheStore = const FileOfflineCacheStore();
+  final OfflineSyncQueue _syncQueue = const OfflineSyncQueue();
 
   ExpenseListPayload? _payload;
   List<PaymentMethodAdminItem> _paymentMethods = const [];
   List<PettyCashBudgetItem> _pettyCashBudgets = const [];
+  List<int> _pendingExpenseIds = const [];
   bool _loading = true;
   bool _usingOfflineData = false;
   String? _statusMessage;
@@ -85,12 +88,21 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
         return;
       }
 
+      final pendingState = await _loadPendingExpenseQueueState();
+
       setState(() {
-        _payload = results[0] as ExpenseListPayload;
+        _payload = _applyPendingExpenseQueueState(
+          results[0] as ExpenseListPayload,
+          pendingState,
+        );
         _paymentMethods = results[1] as List<PaymentMethodAdminItem>;
         _pettyCashBudgets = (results[2] as PettyCashListPayload).items;
+        _pendingExpenseIds = pendingState.pendingIds;
         _loading = false;
         _usingOfflineData = false;
+        _statusMessage = pendingState.pendingIds.isEmpty
+            ? null
+            : 'Some expense changes are still queued for sync.';
       });
 
       await _writeSnapshot();
@@ -136,6 +148,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
     }
 
     final snapshot = ExpensesOfflineSnapshot.fromJson(json);
+    final pendingState = await _loadPendingExpenseQueueState();
     _searchController.text = snapshot.search;
     _categoryController.text = snapshot.category;
     _dateFromController.text = snapshot.dateFrom;
@@ -146,12 +159,17 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
     }
 
     setState(() {
-      _payload = snapshot.payload;
+      _payload = snapshot.payload == null
+          ? null
+          : _applyPendingExpenseQueueState(snapshot.payload!, pendingState);
       _paymentMethods = snapshot.paymentMethods;
       _pettyCashBudgets = snapshot.pettyCashBudgets;
+      _pendingExpenseIds = pendingState.pendingIds;
       _loading = false;
       _usingOfflineData = true;
-      _statusMessage = fallbackMessage;
+      _statusMessage = pendingState.pendingIds.isEmpty
+          ? fallbackMessage
+          : 'Offline mode: showing cached expenses with queued local changes.';
       _error = null;
     });
 
@@ -174,11 +192,6 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
   }
 
   Future<void> _openExpenseEditor({ExpenseItem? expense}) async {
-    if (_usingOfflineData) {
-      _showMessage('Expense changes are only available while online.');
-      return;
-    }
-
     final titleController = TextEditingController(text: expense?.title ?? '');
     final categoryController =
         TextEditingController(text: expense?.category ?? '');
@@ -365,19 +378,20 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
 
       _showMessage(expense == null ? 'Expense created.' : 'Expense updated.');
       await _loadExpenses();
-    } on ApiException catch (error) {
-      _showMessage(error.message);
+    } on ApiException catch (_) {
+      await _queueOfflineExpenseSave(
+        originalExpense: expense,
+        payload: payload,
+      );
     } catch (_) {
-      _showMessage('Unable to save expense.');
+      await _queueOfflineExpenseSave(
+        originalExpense: expense,
+        payload: payload,
+      );
     }
   }
 
   Future<void> _deleteExpense(ExpenseItem expense) async {
-    if (_usingOfflineData) {
-      _showMessage('Expense changes are only available while online.');
-      return;
-    }
-
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -412,11 +426,248 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
 
       _showMessage('Expense deleted.');
       await _loadExpenses();
-    } on ApiException catch (error) {
-      _showMessage(error.message);
+    } on ApiException catch (_) {
+      await _queueOfflineExpenseDelete(expense);
     } catch (_) {
-      _showMessage('Unable to delete expense.');
+      await _queueOfflineExpenseDelete(expense);
     }
+  }
+
+  Future<_PendingExpenseQueueState> _loadPendingExpenseQueueState() async {
+    final queued = await _syncQueue.readQueue();
+    final createdExpenses = <ExpenseItem>[];
+    final updatedExpenses = <ExpenseItem>[];
+    final deletedIds = <int>[];
+
+    for (final item in queued) {
+      if (item.key.startsWith(expenseCreateQueuePrefix)) {
+        final json = item.payload['expense'];
+        if (json is Map<String, dynamic>) {
+          createdExpenses.add(ExpenseItem.fromJson(json));
+        }
+      } else if (item.key.startsWith(expenseUpdateQueuePrefix)) {
+        final json = item.payload['expense'];
+        if (json is Map<String, dynamic>) {
+          updatedExpenses.add(ExpenseItem.fromJson(json));
+        }
+      } else if (item.key.startsWith(expenseDeleteQueuePrefix)) {
+        final id = _toInt(item.payload['expense_id']);
+        if (id != 0) {
+          deletedIds.add(id);
+        }
+      }
+    }
+
+    return _PendingExpenseQueueState(
+      createdExpenses: createdExpenses,
+      updatedExpenses: updatedExpenses,
+      deletedIds: deletedIds,
+    );
+  }
+
+  ExpenseListPayload _applyPendingExpenseQueueState(
+    ExpenseListPayload payload,
+    _PendingExpenseQueueState pendingState,
+  ) {
+    if (!pendingState.hasPendingWork) {
+      return payload;
+    }
+
+    final items = payload.items.map((expense) {
+      final updated = pendingState.updatedExpenses
+          .where((item) => item.id == expense.id)
+          .firstOrNull;
+      final base = updated ?? expense;
+      if (pendingState.deletedIds.contains(base.id)) {
+        return null;
+      }
+      return base;
+    }).whereType<ExpenseItem>().toList();
+
+    for (final item in pendingState.createdExpenses) {
+      final index = items.indexWhere((entry) => entry.id == item.id);
+      if (index >= 0) {
+        items[index] = item;
+      } else {
+        items.insert(0, item);
+      }
+    }
+
+    return ExpenseListPayload(
+      items: items,
+      summary: _buildExpenseSummary(items),
+    );
+  }
+
+  ExpenseSummary _buildExpenseSummary(List<ExpenseItem> items) {
+    final totals = <String, double>{};
+    var totalAmount = 0.0;
+    for (final item in items) {
+      totalAmount += item.amount;
+      final key = (item.category ?? 'Uncategorized').trim();
+      totals[key] = (totals[key] ?? 0) + item.amount;
+    }
+
+    return ExpenseSummary(
+      totalAmount: totalAmount,
+      count: items.length,
+      categories: totals.entries
+          .map(
+            (entry) => ExpenseCategorySummary(
+              label: entry.key,
+              amount: entry.value,
+            ),
+          )
+          .toList(),
+    );
+  }
+
+  Future<void> _queueOfflineExpenseSave({
+    required ExpenseItem? originalExpense,
+    required Map<String, dynamic> payload,
+  }) async {
+    final currentPayload = _payload;
+    if (currentPayload == null) {
+      _showMessage('Unable to save expense offline.');
+      return;
+    }
+
+    final localExpense = _buildLocalExpense(
+      originalExpense: originalExpense,
+      payload: payload,
+    );
+
+    if (originalExpense == null || originalExpense.id < 0) {
+      await _syncQueue.upsert(
+        OfflineSyncOperation(
+          key: '$expenseCreateQueuePrefix${localExpense.id}',
+          type: 'expense_create',
+          payload: {
+            'expense': localExpense.toJson(),
+            'payload': payload,
+          },
+          createdAt: DateTime.now().toIso8601String(),
+        ),
+      );
+    } else {
+      await _syncQueue.upsert(
+        OfflineSyncOperation(
+          key: '$expenseUpdateQueuePrefix${localExpense.id}',
+          type: 'expense_update',
+          payload: {
+            'expense_id': localExpense.id,
+            'expense': localExpense.toJson(),
+            'payload': payload,
+          },
+          createdAt: DateTime.now().toIso8601String(),
+        ),
+      );
+    }
+
+    final pendingState = await _loadPendingExpenseQueueState();
+    final nextItems = [
+      for (final item in currentPayload.items)
+        if (item.id != localExpense.id) item,
+      localExpense,
+    ];
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _payload = _applyPendingExpenseQueueState(
+        ExpenseListPayload(
+          items: nextItems,
+          summary: _buildExpenseSummary(nextItems),
+        ),
+        pendingState,
+      );
+      _pendingExpenseIds = pendingState.pendingIds;
+      _usingOfflineData = true;
+      _statusMessage = originalExpense == null
+          ? 'Expense saved locally and queued for sync.'
+          : 'Expense update saved locally and queued for sync.';
+      _error = null;
+    });
+
+    await _writeSnapshot();
+    _showMessage(
+      originalExpense == null
+          ? 'Expense created locally for later sync.'
+          : 'Expense update saved locally for later sync.',
+    );
+  }
+
+  Future<void> _queueOfflineExpenseDelete(ExpenseItem expense) async {
+    final currentPayload = _payload;
+    if (currentPayload == null) {
+      _showMessage('Unable to delete expense offline.');
+      return;
+    }
+
+    if (expense.id < 0) {
+      await _syncQueue.remove('$expenseCreateQueuePrefix${expense.id}');
+    } else {
+      await _syncQueue.upsert(
+        OfflineSyncOperation(
+          key: '$expenseDeleteQueuePrefix${expense.id}',
+          type: 'expense_delete',
+          payload: {
+            'expense_id': expense.id,
+          },
+          createdAt: DateTime.now().toIso8601String(),
+        ),
+      );
+      await _syncQueue.remove('$expenseUpdateQueuePrefix${expense.id}');
+    }
+
+    final pendingState = await _loadPendingExpenseQueueState();
+    final nextItems =
+        currentPayload.items.where((item) => item.id != expense.id).toList();
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _payload = _applyPendingExpenseQueueState(
+        ExpenseListPayload(
+          items: nextItems,
+          summary: _buildExpenseSummary(nextItems),
+        ),
+        pendingState,
+      );
+      _pendingExpenseIds = pendingState.pendingIds;
+      _usingOfflineData = true;
+      _statusMessage = 'Expense deletion saved locally and queued for sync.';
+      _error = null;
+    });
+
+    await _writeSnapshot();
+    _showMessage('Expense deletion saved locally for later sync.');
+  }
+
+  ExpenseItem _buildLocalExpense({
+    required ExpenseItem? originalExpense,
+    required Map<String, dynamic> payload,
+  }) {
+    final budgetId = payload['petty_cash_budget_id'] as int?;
+    final budget =
+        _pettyCashBudgets.where((item) => item.id == budgetId).firstOrNull;
+
+    return ExpenseItem(
+      id: originalExpense?.id ?? -DateTime.now().millisecondsSinceEpoch,
+      title: '${payload['title'] ?? ''}'.trim(),
+      category: payload['category'] as String?,
+      amount: (payload['amount'] as num?)?.toDouble() ?? 0,
+      paymentMethod: '${payload['payment_method'] ?? ''}'.trim(),
+      expenseDate: payload['expense_date'] as String?,
+      referenceNo: payload['reference_no'] as String?,
+      notes: payload['notes'] as String?,
+      recordedByName: originalExpense?.recordedByName ?? widget.session.name,
+      pettyCashBudget: budget,
+    );
   }
 
   void _showMessage(String message) {
@@ -461,9 +712,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                       ),
                       if (_canCreate)
                         FilledButton.icon(
-                          onPressed: _usingOfflineData
-                              ? null
-                              : () => _openExpenseEditor(),
+                          onPressed: () => _openExpenseEditor(),
                           icon: const Icon(Icons.add),
                           label: const Text('Add'),
                         ),
@@ -630,6 +879,11 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                                 label: 'Category',
                                 value: expense.category!,
                               ),
+                            if (_pendingExpenseIds.contains(expense.id))
+                              const _ExpenseBadge(
+                                label: 'Status',
+                                value: 'Pending Sync',
+                              ),
                           ],
                         ),
                         const SizedBox(height: 10),
@@ -652,17 +906,13 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                             children: [
                               if (_canEdit)
                                 OutlinedButton.icon(
-                                  onPressed: _usingOfflineData
-                                      ? null
-                                      : () => _openExpenseEditor(expense: expense),
+                                  onPressed: () => _openExpenseEditor(expense: expense),
                                   icon: const Icon(Icons.edit_outlined),
                                   label: const Text('Edit'),
                                 ),
                               if (_canDelete)
                                 OutlinedButton.icon(
-                                  onPressed: _usingOfflineData
-                                      ? null
-                                      : () => _deleteExpense(expense),
+                                  onPressed: () => _deleteExpense(expense),
                                   icon: const Icon(Icons.delete_outline),
                                   label: const Text('Delete'),
                                 ),
@@ -717,6 +967,28 @@ class _FinanceOfflineBanner extends StatelessWidget {
   }
 }
 
+class _PendingExpenseQueueState {
+  const _PendingExpenseQueueState({
+    required this.createdExpenses,
+    required this.updatedExpenses,
+    required this.deletedIds,
+  });
+
+  final List<ExpenseItem> createdExpenses;
+  final List<ExpenseItem> updatedExpenses;
+  final List<int> deletedIds;
+
+  List<int> get pendingIds => [
+        ...createdExpenses.map((item) => item.id),
+        ...updatedExpenses.map((item) => item.id),
+      ]..sort();
+
+  bool get hasPendingWork =>
+      createdExpenses.isNotEmpty ||
+      updatedExpenses.isNotEmpty ||
+      deletedIds.isNotEmpty;
+}
+
 class _ExpenseBadge extends StatelessWidget {
   const _ExpenseBadge({
     required this.label,
@@ -755,6 +1027,22 @@ class _ExpenseEmpty extends StatelessWidget {
       child: Text(message, style: Theme.of(context).textTheme.bodyLarge),
     );
   }
+}
+
+extension<T> on Iterable<T> {
+  T? get firstOrNull => isEmpty ? null : first;
+}
+
+int _toInt(dynamic value) {
+  if (value is int) {
+    return value;
+  }
+
+  if (value is double) {
+    return value.round();
+  }
+
+  return int.tryParse('$value') ?? 0;
 }
 
 String _today() {

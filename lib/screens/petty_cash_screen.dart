@@ -4,6 +4,7 @@ import '../models/auth_session.dart';
 import '../models/finance_admin_models.dart';
 import '../services/laravel_api.dart';
 import '../services/offline_cache_store.dart';
+import '../services/offline_sync_queue.dart';
 
 class PettyCashScreen extends StatefulWidget {
   const PettyCashScreen({
@@ -23,10 +24,12 @@ class PettyCashScreen extends StatefulWidget {
 
 class _PettyCashScreenState extends State<PettyCashScreen> {
   final OfflineCacheStore _cacheStore = const FileOfflineCacheStore();
+  final OfflineSyncQueue _syncQueue = const OfflineSyncQueue();
 
   PettyCashListPayload? _payload;
   String _statusFilter = '';
   Map<int, List<PettyCashTransactionItem>> _transactionsByBudget = const {};
+  List<int> _pendingBudgetIds = const [];
   bool _loading = true;
   bool _usingOfflineData = false;
   String? _statusMessage;
@@ -59,10 +62,16 @@ class _PettyCashScreenState extends State<PettyCashScreen> {
         return;
       }
 
+      final pendingState = await _loadPendingPettyCashQueueState();
+
       setState(() {
-        _payload = payload;
+        _payload = _applyPendingPettyCashQueueState(payload, pendingState);
+        _pendingBudgetIds = pendingState.pendingIds;
         _loading = false;
         _usingOfflineData = false;
+        _statusMessage = pendingState.pendingIds.isEmpty
+            ? null
+            : 'Some petty cash changes are still queued for sync.';
       });
 
       await _writeSnapshot();
@@ -108,18 +117,24 @@ class _PettyCashScreenState extends State<PettyCashScreen> {
     }
 
     final snapshot = PettyCashOfflineSnapshot.fromJson(json);
+    final pendingState = await _loadPendingPettyCashQueueState();
 
     if (!mounted) {
       return true;
     }
 
     setState(() {
-      _payload = snapshot.payload;
+      _payload = snapshot.payload == null
+          ? null
+          : _applyPendingPettyCashQueueState(snapshot.payload!, pendingState);
       _statusFilter = snapshot.statusFilter;
       _transactionsByBudget = snapshot.transactionsByBudget;
+      _pendingBudgetIds = pendingState.pendingIds;
       _loading = false;
       _usingOfflineData = true;
-      _statusMessage = fallbackMessage;
+      _statusMessage = pendingState.pendingIds.isEmpty
+          ? fallbackMessage
+          : 'Offline mode: showing cached petty cash with queued local changes.';
       _error = null;
     });
 
@@ -138,11 +153,6 @@ class _PettyCashScreenState extends State<PettyCashScreen> {
   }
 
   Future<void> _openBudgetEditor({PettyCashBudgetItem? budget}) async {
-    if (_usingOfflineData) {
-      _showMessage('Petty cash changes are only available while online.');
-      return;
-    }
-
     final nameController = TextEditingController(text: budget?.name ?? '');
     final periodStartController = TextEditingController(
       text: budget?.periodStart ?? _today(),
@@ -291,19 +301,20 @@ class _PettyCashScreenState extends State<PettyCashScreen> {
 
       _showMessage(budget == null ? 'Budget created.' : 'Budget updated.');
       await _loadBudgets();
-    } on ApiException catch (error) {
-      _showMessage(error.message);
+    } on ApiException catch (_) {
+      await _queueOfflineBudgetSave(
+        originalBudget: budget,
+        payload: payload,
+      );
     } catch (_) {
-      _showMessage('Unable to save petty cash budget.');
+      await _queueOfflineBudgetSave(
+        originalBudget: budget,
+        payload: payload,
+      );
     }
   }
 
   Future<void> _deleteBudget(PettyCashBudgetItem budget) async {
-    if (_usingOfflineData) {
-      _showMessage('Petty cash changes are only available while online.');
-      return;
-    }
-
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -338,19 +349,14 @@ class _PettyCashScreenState extends State<PettyCashScreen> {
 
       _showMessage('Budget deleted.');
       await _loadBudgets();
-    } on ApiException catch (error) {
-      _showMessage(error.message);
+    } on ApiException catch (_) {
+      await _queueOfflineBudgetDelete(budget);
     } catch (_) {
-      _showMessage('Unable to delete petty cash budget.');
+      await _queueOfflineBudgetDelete(budget);
     }
   }
 
   Future<void> _topUpBudget(PettyCashBudgetItem budget) async {
-    if (_usingOfflineData) {
-      _showMessage('Petty cash changes are only available while online.');
-      return;
-    }
-
     final amountController = TextEditingController();
     final dateController = TextEditingController(text: _today());
     final referenceController = TextEditingController();
@@ -419,20 +425,22 @@ class _PettyCashScreenState extends State<PettyCashScreen> {
       return;
     }
 
+    final payload = {
+      'amount': double.tryParse(amountController.text.trim()) ?? 0,
+      'transaction_date': dateController.text.trim(),
+      'reference_no': referenceController.text.trim().isEmpty
+          ? null
+          : referenceController.text.trim(),
+      'notes': notesController.text.trim().isEmpty
+          ? null
+          : notesController.text.trim(),
+    };
+
     try {
       await widget.api.topUpPettyCashBudget(
         token: widget.token,
         budgetId: budget.id,
-        payload: {
-          'amount': double.tryParse(amountController.text.trim()) ?? 0,
-          'transaction_date': dateController.text.trim(),
-          'reference_no': referenceController.text.trim().isEmpty
-              ? null
-              : referenceController.text.trim(),
-          'notes': notesController.text.trim().isEmpty
-              ? null
-              : notesController.text.trim(),
-        },
+        payload: payload,
       );
 
       if (!mounted) {
@@ -441,10 +449,10 @@ class _PettyCashScreenState extends State<PettyCashScreen> {
 
       _showMessage('Top up saved.');
       await _loadBudgets();
-    } on ApiException catch (error) {
-      _showMessage(error.message);
+    } on ApiException catch (_) {
+      await _queueOfflineTopUp(budget, payload);
     } catch (_) {
-      _showMessage('Unable to top up petty cash budget.');
+      await _queueOfflineTopUp(budget, payload);
     }
   }
 
@@ -560,6 +568,334 @@ class _PettyCashScreenState extends State<PettyCashScreen> {
       ..showSnackBar(SnackBar(content: Text(message)));
   }
 
+  Future<_PendingPettyCashQueueState> _loadPendingPettyCashQueueState() async {
+    final queued = await _syncQueue.readQueue();
+    final createdBudgets = <PettyCashBudgetItem>[];
+    final updatedBudgets = <PettyCashBudgetItem>[];
+    final deletedIds = <int>[];
+    final topUps = <int, List<PettyCashTransactionItem>>{};
+
+    for (final item in queued) {
+      if (item.key.startsWith(pettyCashCreateQueuePrefix)) {
+        final json = item.payload['budget'];
+        if (json is Map<String, dynamic>) {
+          createdBudgets.add(PettyCashBudgetItem.fromJson(json));
+        }
+      } else if (item.key.startsWith(pettyCashUpdateQueuePrefix)) {
+        final json = item.payload['budget'];
+        if (json is Map<String, dynamic>) {
+          updatedBudgets.add(PettyCashBudgetItem.fromJson(json));
+        }
+      } else if (item.key.startsWith(pettyCashDeleteQueuePrefix)) {
+        final id = _toInt(item.payload['budget_id']);
+        if (id != 0) {
+          deletedIds.add(id);
+        }
+      } else if (item.key.startsWith(pettyCashTopUpQueuePrefix)) {
+        final budgetId = _toInt(item.payload['budget_id']);
+        final json = item.payload['transaction'];
+        if (budgetId != 0 && json is Map<String, dynamic>) {
+          topUps[budgetId] = [...(topUps[budgetId] ?? const []), PettyCashTransactionItem.fromJson(json)];
+        }
+      }
+    }
+
+    return _PendingPettyCashQueueState(
+      createdBudgets: createdBudgets,
+      updatedBudgets: updatedBudgets,
+      deletedIds: deletedIds,
+      topUpsByBudget: topUps,
+    );
+  }
+
+  PettyCashListPayload _applyPendingPettyCashQueueState(
+    PettyCashListPayload payload,
+    _PendingPettyCashQueueState pendingState,
+  ) {
+    if (!pendingState.hasPendingWork) {
+      return payload;
+    }
+
+    final items = payload.items.map((budget) {
+      final updated = pendingState.updatedBudgets
+          .where((item) => item.id == budget.id)
+          .firstOrNull;
+      var base = updated ?? budget;
+      if (pendingState.deletedIds.contains(base.id)) {
+        return null;
+      }
+      final topUps = pendingState.topUpsByBudget[base.id] ?? const [];
+      if (topUps.isNotEmpty) {
+        final total = topUps.fold<double>(
+          0,
+          (sum, item) => sum + item.amount,
+        );
+        base = PettyCashBudgetItem(
+          id: base.id,
+          name: base.name,
+          periodStart: base.periodStart,
+          periodEnd: base.periodEnd,
+          openingBalance: base.openingBalance,
+          currentBalance: base.currentBalance + total,
+          status: base.status,
+          notes: base.notes,
+        );
+      }
+      return base;
+    }).whereType<PettyCashBudgetItem>().toList();
+
+    for (final item in pendingState.createdBudgets) {
+      final index = items.indexWhere((entry) => entry.id == item.id);
+      if (index >= 0) {
+        items[index] = item;
+      } else {
+        items.insert(0, item);
+      }
+    }
+
+    return PettyCashListPayload(
+      items: items,
+      summary: _buildPettyCashSummary(items),
+    );
+  }
+
+  PettyCashSummary _buildPettyCashSummary(List<PettyCashBudgetItem> items) {
+    final activeItems = items.where((item) => item.status == 'active').toList();
+    return PettyCashSummary(
+      activeBalance: activeItems.fold<double>(
+        0,
+        (sum, item) => sum + item.currentBalance,
+      ),
+      activeCount: activeItems.length,
+    );
+  }
+
+  Future<void> _queueOfflineBudgetSave({
+    required PettyCashBudgetItem? originalBudget,
+    required Map<String, dynamic> payload,
+  }) async {
+    final currentPayload = _payload;
+    if (currentPayload == null) {
+      _showMessage('Unable to save petty cash budget offline.');
+      return;
+    }
+
+    final localBudget = _buildLocalBudget(
+      originalBudget: originalBudget,
+      payload: payload,
+    );
+
+    if (originalBudget == null || originalBudget.id < 0) {
+      await _syncQueue.upsert(
+        OfflineSyncOperation(
+          key: '$pettyCashCreateQueuePrefix${localBudget.id}',
+          type: 'petty_cash_create',
+          payload: {
+            'budget': localBudget.toJson(),
+            'payload': payload,
+          },
+          createdAt: DateTime.now().toIso8601String(),
+        ),
+      );
+    } else {
+      await _syncQueue.upsert(
+        OfflineSyncOperation(
+          key: '$pettyCashUpdateQueuePrefix${localBudget.id}',
+          type: 'petty_cash_update',
+          payload: {
+            'budget_id': localBudget.id,
+            'budget': localBudget.toJson(),
+            'payload': payload,
+          },
+          createdAt: DateTime.now().toIso8601String(),
+        ),
+      );
+    }
+
+    final pendingState = await _loadPendingPettyCashQueueState();
+    final nextItems = [
+      for (final item in currentPayload.items)
+        if (item.id != localBudget.id) item,
+      localBudget,
+    ];
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _payload = _applyPendingPettyCashQueueState(
+        PettyCashListPayload(
+          items: nextItems,
+          summary: _buildPettyCashSummary(nextItems),
+        ),
+        pendingState,
+      );
+      _pendingBudgetIds = pendingState.pendingIds;
+      _usingOfflineData = true;
+      _statusMessage = originalBudget == null
+          ? 'Petty cash budget saved locally and queued for sync.'
+          : 'Petty cash update saved locally and queued for sync.';
+      _error = null;
+    });
+
+    await _writeSnapshot();
+    _showMessage(
+      originalBudget == null
+          ? 'Petty cash budget created locally for later sync.'
+          : 'Petty cash update saved locally for later sync.',
+    );
+  }
+
+  Future<void> _queueOfflineBudgetDelete(PettyCashBudgetItem budget) async {
+    final currentPayload = _payload;
+    if (currentPayload == null) {
+      _showMessage('Unable to delete petty cash budget offline.');
+      return;
+    }
+
+    if (budget.id < 0) {
+      await _syncQueue.remove('$pettyCashCreateQueuePrefix${budget.id}');
+    } else {
+      await _syncQueue.upsert(
+        OfflineSyncOperation(
+          key: '$pettyCashDeleteQueuePrefix${budget.id}',
+          type: 'petty_cash_delete',
+          payload: {
+            'budget_id': budget.id,
+          },
+          createdAt: DateTime.now().toIso8601String(),
+        ),
+      );
+      await _syncQueue.remove('$pettyCashUpdateQueuePrefix${budget.id}');
+      await _syncQueue.remove('$pettyCashTopUpQueuePrefix${budget.id}');
+    }
+
+    final pendingState = await _loadPendingPettyCashQueueState();
+    final nextItems =
+        currentPayload.items.where((item) => item.id != budget.id).toList();
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _payload = _applyPendingPettyCashQueueState(
+        PettyCashListPayload(
+          items: nextItems,
+          summary: _buildPettyCashSummary(nextItems),
+        ),
+        pendingState,
+      );
+      _pendingBudgetIds = pendingState.pendingIds;
+      _usingOfflineData = true;
+      _statusMessage =
+          'Petty cash budget deletion saved locally and queued for sync.';
+      _error = null;
+    });
+
+    await _writeSnapshot();
+    _showMessage('Petty cash budget deletion saved locally for later sync.');
+  }
+
+  Future<void> _queueOfflineTopUp(
+    PettyCashBudgetItem budget,
+    Map<String, dynamic> payload,
+  ) async {
+    final currentPayload = _payload;
+    if (currentPayload == null) {
+      _showMessage('Unable to save petty cash top up offline.');
+      return;
+    }
+
+    final transaction = PettyCashTransactionItem(
+      id: -DateTime.now().millisecondsSinceEpoch,
+      type: 'top_up',
+      amount: (payload['amount'] as num?)?.toDouble() ?? 0,
+      transactionDate: payload['transaction_date'] as String?,
+      referenceNo: payload['reference_no'] as String?,
+      notes: payload['notes'] as String?,
+      createdByName: widget.session.name,
+    );
+
+    await _syncQueue.upsert(
+      OfflineSyncOperation(
+        key: '$pettyCashTopUpQueuePrefix${budget.id}',
+        type: 'petty_cash_topup',
+        payload: {
+          'budget_id': budget.id,
+          'transaction': transaction.toJson(),
+          'payload': payload,
+        },
+        createdAt: DateTime.now().toIso8601String(),
+      ),
+    );
+
+    final pendingState = await _loadPendingPettyCashQueueState();
+    final nextItems = currentPayload.items.map((item) {
+      if (item.id != budget.id) {
+        return item;
+      }
+
+      return PettyCashBudgetItem(
+        id: item.id,
+        name: item.name,
+        periodStart: item.periodStart,
+        periodEnd: item.periodEnd,
+        openingBalance: item.openingBalance,
+        currentBalance: item.currentBalance + transaction.amount,
+        status: item.status,
+        notes: item.notes,
+      );
+    }).toList();
+
+    final nextTransactions = {
+      ..._transactionsByBudget,
+      budget.id: [transaction, ...(_transactionsByBudget[budget.id] ?? const [])],
+    };
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _transactionsByBudget = nextTransactions;
+      _payload = _applyPendingPettyCashQueueState(
+        PettyCashListPayload(
+          items: nextItems,
+          summary: _buildPettyCashSummary(nextItems),
+        ),
+        pendingState,
+      );
+      _pendingBudgetIds = pendingState.pendingIds;
+      _usingOfflineData = true;
+      _statusMessage = 'Petty cash top up saved locally and queued for sync.';
+      _error = null;
+    });
+
+    await _writeSnapshot();
+    _showMessage('Petty cash top up saved locally for later sync.');
+  }
+
+  PettyCashBudgetItem _buildLocalBudget({
+    required PettyCashBudgetItem? originalBudget,
+    required Map<String, dynamic> payload,
+  }) {
+    final openingBalance = originalBudget?.openingBalance ??
+        (payload['opening_balance'] as num?)?.toDouble() ??
+        0;
+    return PettyCashBudgetItem(
+      id: originalBudget?.id ?? -DateTime.now().millisecondsSinceEpoch,
+      name: '${payload['name'] ?? ''}'.trim(),
+      periodStart: payload['period_start'] as String?,
+      periodEnd: payload['period_end'] as String?,
+      openingBalance: openingBalance,
+      currentBalance: originalBudget?.currentBalance ?? openingBalance,
+      status: '${payload['status'] ?? 'active'}'.trim(),
+      notes: payload['notes'] as String?,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final payload = _payload;
@@ -592,8 +928,7 @@ class _PettyCashScreenState extends State<PettyCashScreen> {
                       ),
                       if (_canCreate)
                         FilledButton.icon(
-                          onPressed:
-                              _usingOfflineData ? null : () => _openBudgetEditor(),
+                          onPressed: () => _openBudgetEditor(),
                           icon: const Icon(Icons.add),
                           label: const Text('Add'),
                         ),
@@ -707,6 +1042,11 @@ class _PettyCashScreenState extends State<PettyCashScreen> {
                               label: 'Opening',
                               value: budget.openingBalance.toStringAsFixed(2),
                             ),
+                            if (_pendingBudgetIds.contains(budget.id))
+                              const _PettyMetric(
+                                label: 'Queue',
+                                value: 'Pending Sync',
+                              ),
                           ],
                         ),
                         const SizedBox(height: 10),
@@ -729,24 +1069,19 @@ class _PettyCashScreenState extends State<PettyCashScreen> {
                             ),
                             if (_canTopUp && budget.status == 'active')
                               OutlinedButton.icon(
-                                onPressed:
-                                    _usingOfflineData ? null : () => _topUpBudget(budget),
+                                onPressed: () => _topUpBudget(budget),
                                 icon: const Icon(Icons.add_card_outlined),
                                 label: const Text('Top Up'),
                               ),
                             if (_canEdit)
                               OutlinedButton.icon(
-                                onPressed: _usingOfflineData
-                                    ? null
-                                    : () => _openBudgetEditor(budget: budget),
+                                onPressed: () => _openBudgetEditor(budget: budget),
                                 icon: const Icon(Icons.edit_outlined),
                                 label: const Text('Edit'),
                               ),
                             if (_canEdit)
                               OutlinedButton.icon(
-                                onPressed: _usingOfflineData
-                                    ? null
-                                    : () => _deleteBudget(budget),
+                                onPressed: () => _deleteBudget(budget),
                                 icon: const Icon(Icons.delete_outline),
                                 label: const Text('Delete'),
                               ),
@@ -799,6 +1134,33 @@ class _PettyOfflineBanner extends StatelessWidget {
   }
 }
 
+class _PendingPettyCashQueueState {
+  const _PendingPettyCashQueueState({
+    required this.createdBudgets,
+    required this.updatedBudgets,
+    required this.deletedIds,
+    required this.topUpsByBudget,
+  });
+
+  final List<PettyCashBudgetItem> createdBudgets;
+  final List<PettyCashBudgetItem> updatedBudgets;
+  final List<int> deletedIds;
+  final Map<int, List<PettyCashTransactionItem>> topUpsByBudget;
+
+  List<int> get pendingIds => {
+        ...createdBudgets.map((item) => item.id),
+        ...updatedBudgets.map((item) => item.id),
+        ...topUpsByBudget.keys,
+      }.toList()
+        ..sort();
+
+  bool get hasPendingWork =>
+      createdBudgets.isNotEmpty ||
+      updatedBudgets.isNotEmpty ||
+      deletedIds.isNotEmpty ||
+      topUpsByBudget.isNotEmpty;
+}
+
 class _PettyMetric extends StatelessWidget {
   const _PettyMetric({
     required this.label,
@@ -837,6 +1199,22 @@ class _PettyEmpty extends StatelessWidget {
       child: Text(message, style: Theme.of(context).textTheme.bodyLarge),
     );
   }
+}
+
+extension<T> on Iterable<T> {
+  T? get firstOrNull => isEmpty ? null : first;
+}
+
+int _toInt(dynamic value) {
+  if (value is int) {
+    return value;
+  }
+
+  if (value is double) {
+    return value.round();
+  }
+
+  return int.tryParse('$value') ?? 0;
 }
 
 String _today() {

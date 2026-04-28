@@ -1,3 +1,5 @@
+import 'subject_attendance_models.dart';
+
 class ClassReportResponse {
   const ClassReportResponse({
     required this.academicYear,
@@ -188,6 +190,16 @@ class SubjectTimetableResponse {
           .toList(),
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'academic_year_id': academicYearId,
+      'day_of_week': dayOfWeek,
+      'entries': entries.map((item) => item.toJson()).toList(),
+      'periods_per_day': periodsPerDay,
+      'periods': periods.map((item) => item.toJson()).toList(),
+    };
+  }
 }
 
 class SubjectTimetableEntry {
@@ -218,6 +230,17 @@ class SubjectTimetableEntry {
       assignmentLabel: '${json['assignment_label'] ?? ''}'.trim(),
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'period_number': periodNumber,
+      'teacher_subject_assignment_id': teacherSubjectAssignmentId,
+      'subject_name': subjectName,
+      'teacher_name': teacherName,
+      'assignment_label': assignmentLabel,
+    };
+  }
 }
 
 class SubjectTimetablePeriod {
@@ -234,6 +257,13 @@ class SubjectTimetablePeriod {
       value: _toInt(json['value']),
       label: '${json['label'] ?? ''}'.trim(),
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'value': value,
+      'label': label,
+    };
   }
 }
 
@@ -256,6 +286,13 @@ class SubjectTimetableAssignmentResponse {
           .map(SubjectTimetableAssignment.fromJson)
           .toList(),
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'academic_year_id': academicYearId,
+      'assignments': assignments.map((item) => item.toJson()).toList(),
+    };
   }
 }
 
@@ -286,6 +323,17 @@ class SubjectTimetableAssignment {
       teacherName: _toNullableString(json['teacher_name']),
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'subject_id': subjectId,
+      'teacher_id': teacherId,
+      'label': label,
+      'subject_name': subjectName,
+      'teacher_name': teacherName,
+    };
+  }
 }
 
 class SubjectTimetableSaveDraft {
@@ -301,6 +349,69 @@ class SubjectTimetableSaveDraft {
     return {
       'period_number': periodNumber,
       'teacher_subject_assignment_id': teacherSubjectAssignmentId,
+    };
+  }
+}
+
+class SubjectTimetableOfflineSnapshot {
+  const SubjectTimetableOfflineSnapshot({
+    required this.filters,
+    required this.timetable,
+    required this.assignments,
+    required this.selectedClassId,
+    required this.selectedDay,
+    required this.selectedAssignments,
+  });
+
+  final SubjectAttendanceFilters? filters;
+  final SubjectTimetableResponse? timetable;
+  final SubjectTimetableAssignmentResponse? assignments;
+  final int? selectedClassId;
+  final int selectedDay;
+  final Map<int, int?> selectedAssignments;
+
+  factory SubjectTimetableOfflineSnapshot.fromJson(
+    Map<String, dynamic> json,
+  ) {
+    final assignmentsJson =
+        json['selected_assignments'] as Map<String, dynamic>? ?? const {};
+
+    return SubjectTimetableOfflineSnapshot(
+      filters: json['filters'] is Map<String, dynamic>
+          ? SubjectAttendanceFilters.fromJson(
+              json['filters'] as Map<String, dynamic>,
+            )
+          : null,
+      timetable: json['timetable'] is Map<String, dynamic>
+          ? SubjectTimetableResponse.fromJson(
+              json['timetable'] as Map<String, dynamic>,
+            )
+          : null,
+      assignments: json['assignments'] is Map<String, dynamic>
+          ? SubjectTimetableAssignmentResponse.fromJson(
+              json['assignments'] as Map<String, dynamic>,
+            )
+          : null,
+      selectedClassId: _toNullableInt(json['selected_class_id']),
+      selectedDay: _toInt(json['selected_day']),
+      selectedAssignments: {
+        for (final entry in assignmentsJson.entries)
+          _toInt(entry.key): _toNullableInt(entry.value),
+      },
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'filters': filters?.toJson(),
+      'timetable': timetable?.toJson(),
+      'assignments': assignments?.toJson(),
+      'selected_class_id': selectedClassId,
+      'selected_day': selectedDay,
+      'selected_assignments': {
+        for (final entry in selectedAssignments.entries)
+          '${entry.key}': entry.value,
+      },
     };
   }
 }

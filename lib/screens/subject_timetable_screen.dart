@@ -4,6 +4,8 @@ import '../models/main_attendance_models.dart';
 import '../models/school_reports_models.dart';
 import '../models/subject_attendance_models.dart';
 import '../services/laravel_api.dart';
+import '../services/offline_cache_store.dart';
+import '../services/offline_sync_queue.dart';
 
 class SubjectTimetableScreen extends StatefulWidget {
   const SubjectTimetableScreen({
@@ -22,6 +24,8 @@ class SubjectTimetableScreen extends StatefulWidget {
 }
 
 class _SubjectTimetableScreenState extends State<SubjectTimetableScreen> {
+  final OfflineCacheStore _cacheStore = const FileOfflineCacheStore();
+  final OfflineSyncQueue _syncQueue = const OfflineSyncQueue();
   SubjectAttendanceFilters? _filters;
   SubjectTimetableResponse? _timetable;
   SubjectTimetableAssignmentResponse? _assignments;
@@ -31,6 +35,9 @@ class _SubjectTimetableScreenState extends State<SubjectTimetableScreen> {
   bool _loadingFilters = true;
   bool _loadingTimetable = false;
   bool _saving = false;
+  bool _usingOfflineData = false;
+  bool _hasPendingDraft = false;
+  String? _statusMessage;
   String? _error;
 
   static const _weekdays = <int, String>{
@@ -52,12 +59,18 @@ class _SubjectTimetableScreenState extends State<SubjectTimetableScreen> {
   Future<void> _loadFilters() async {
     setState(() {
       _loadingFilters = true;
+      _statusMessage = null;
       _error = null;
     });
 
     try {
       final filters = await widget.api.subjectAttendanceFilters(widget.token);
       final firstClass = filters.classes.isNotEmpty ? filters.classes.first : null;
+      final snapshot = await _readSnapshot();
+      final restoredClassId = snapshot?.selectedClassId;
+      final hasRestoredClass = filters.classes.any(
+        (item) => item.id == restoredClassId,
+      );
 
       if (!mounted) {
         return;
@@ -65,10 +78,22 @@ class _SubjectTimetableScreenState extends State<SubjectTimetableScreen> {
 
       setState(() {
         _filters = filters;
-        _selectedClassId = firstClass?.id;
+        _selectedClassId = hasRestoredClass ? restoredClassId : firstClass?.id;
+        _selectedDay = (snapshot?.selectedDay ?? 0) > 0
+            ? snapshot!.selectedDay
+            : _selectedDay;
         _loadingFilters = false;
+        _usingOfflineData = false;
       });
+      await _writeSnapshot();
     } on ApiException catch (error) {
+      final restored = await _restoreSnapshot(
+        'Offline mode: showing last synced timetable setup.',
+      );
+      if (restored) {
+        return;
+      }
+
       if (!mounted) {
         return;
       }
@@ -77,6 +102,13 @@ class _SubjectTimetableScreenState extends State<SubjectTimetableScreen> {
         _error = error.message;
       });
     } catch (_) {
+      final restored = await _restoreSnapshot(
+        'Offline mode: showing last synced timetable setup.',
+      );
+      if (restored) {
+        return;
+      }
+
       if (!mounted) {
         return;
       }
@@ -115,6 +147,10 @@ class _SubjectTimetableScreenState extends State<SubjectTimetableScreen> {
 
       final timetable = results[0] as SubjectTimetableResponse;
       final assignments = results[1] as SubjectTimetableAssignmentResponse;
+      final pendingDraft = await _loadPendingDraft(
+        classId: classId,
+        dayOfWeek: _selectedDay,
+      );
 
       if (!mounted) {
         return;
@@ -132,8 +168,28 @@ class _SubjectTimetableScreenState extends State<SubjectTimetableScreen> {
         _timetable = timetable;
         _assignments = assignments;
         _loadingTimetable = false;
+        _usingOfflineData = false;
+        _hasPendingDraft = pendingDraft != null;
+        _statusMessage = pendingDraft == null
+            ? null
+            : 'Offline timetable draft restored. Sync again when the server is reachable.';
       });
+
+      if (pendingDraft != null) {
+        _selectedAssignments
+          ..clear()
+          ..addAll(pendingDraft);
+        setState(() {});
+      }
+      await _writeSnapshot();
     } on ApiException catch (error) {
+      final restored = await _restoreSnapshot(
+        'Offline mode: showing last synced subject timetable.',
+      );
+      if (restored) {
+        return;
+      }
+
       if (!mounted) {
         return;
       }
@@ -144,6 +200,13 @@ class _SubjectTimetableScreenState extends State<SubjectTimetableScreen> {
         _error = error.message;
       });
     } catch (_) {
+      final restored = await _restoreSnapshot(
+        'Offline mode: showing last synced subject timetable.',
+      );
+      if (restored) {
+        return;
+      }
+
       if (!mounted) {
         return;
       }
@@ -168,20 +231,23 @@ class _SubjectTimetableScreenState extends State<SubjectTimetableScreen> {
     });
 
     try {
+      final entries = timetable.periods
+          .map(
+            (period) => SubjectTimetableSaveDraft(
+              periodNumber: period.value,
+              teacherSubjectAssignmentId: _selectedAssignments[period.value],
+            ),
+          )
+          .toList();
+
       await widget.api.saveSubjectTimetable(
         token: widget.token,
         academicYearId: _filters?.academicYearId,
         schoolClassId: classId,
         dayOfWeek: _selectedDay,
-        entries: timetable.periods
-            .map(
-              (period) => SubjectTimetableSaveDraft(
-                periodNumber: period.value,
-                teacherSubjectAssignmentId: _selectedAssignments[period.value],
-              ),
-            )
-            .toList(),
+        entries: entries,
       );
+      await _syncQueue.remove(_queueKey(classId, _selectedDay));
 
       if (!mounted) {
         return;
@@ -195,27 +261,168 @@ class _SubjectTimetableScreenState extends State<SubjectTimetableScreen> {
 
       setState(() {
         _saving = false;
+        _hasPendingDraft = false;
+        _usingOfflineData = false;
+        _statusMessage = null;
       });
 
       await _loadTimetable();
     } on ApiException catch (error) {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _saving = false;
-        _error = error.message;
-      });
+      await _queueOfflineDraft(
+        classId: classId,
+        timetable: timetable,
+      );
     } catch (_) {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _saving = false;
-        _error = 'Unable to save subject timetable.';
-      });
+      await _queueOfflineDraft(
+        classId: classId,
+        timetable: timetable,
+      );
     }
   }
+
+  Future<void> _queueOfflineDraft({
+    required int classId,
+    required SubjectTimetableResponse timetable,
+  }) async {
+    final entries = timetable.periods
+        .map(
+          (period) => SubjectTimetableSaveDraft(
+            periodNumber: period.value,
+            teacherSubjectAssignmentId: _selectedAssignments[period.value],
+          ),
+        )
+        .toList();
+
+    await _syncQueue.upsert(
+      OfflineSyncOperation(
+        key: _queueKey(classId, _selectedDay),
+        type: 'subject_timetable_save',
+        payload: {
+          'academic_year_id': _filters?.academicYearId,
+          'school_class_id': classId,
+          'day_of_week': _selectedDay,
+          'entries': entries.map((item) => item.toJson()).toList(),
+        },
+        createdAt: DateTime.now().toIso8601String(),
+      ),
+    );
+
+    await _writeSnapshot();
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _saving = false;
+      _usingOfflineData = true;
+      _hasPendingDraft = true;
+      _statusMessage =
+          'Timetable draft saved locally and queued for sync.';
+      _error = null;
+    });
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        const SnackBar(
+          content: Text('Subject timetable saved offline for later sync.'),
+        ),
+      );
+  }
+
+  Future<SubjectTimetableOfflineSnapshot?> _readSnapshot() async {
+    final json = await _cacheStore.readCacheDocument(_cacheKey);
+    if (json == null) {
+      return null;
+    }
+
+    return SubjectTimetableOfflineSnapshot.fromJson(json);
+  }
+
+  Future<bool> _restoreSnapshot(String fallbackMessage) async {
+    final snapshot = await _readSnapshot();
+    if (snapshot == null) {
+      return false;
+    }
+
+    final pendingDraft = await _loadPendingDraft(
+      classId: snapshot.selectedClassId,
+      dayOfWeek: snapshot.selectedDay,
+    );
+
+    if (!mounted) {
+      return true;
+    }
+
+    _selectedAssignments
+      ..clear()
+      ..addAll(pendingDraft ?? snapshot.selectedAssignments);
+
+    setState(() {
+      _filters = snapshot.filters;
+      _timetable = snapshot.timetable;
+      _assignments = snapshot.assignments;
+      _selectedClassId = snapshot.selectedClassId;
+      _selectedDay = snapshot.selectedDay;
+      _loadingFilters = false;
+      _loadingTimetable = false;
+      _saving = false;
+      _usingOfflineData = true;
+      _hasPendingDraft = pendingDraft != null;
+      _statusMessage = pendingDraft == null
+          ? fallbackMessage
+          : 'Offline timetable draft restored. Sync again when the server is reachable.';
+      _error = null;
+    });
+
+    return true;
+  }
+
+  Future<void> _writeSnapshot() async {
+    await _cacheStore.writeCacheDocument(
+      _cacheKey,
+      SubjectTimetableOfflineSnapshot(
+        filters: _filters,
+        timetable: _timetable,
+        assignments: _assignments,
+        selectedClassId: _selectedClassId,
+        selectedDay: _selectedDay,
+        selectedAssignments: _selectedAssignments,
+      ).toJson(),
+    );
+  }
+
+  Future<Map<int, int?>?> _loadPendingDraft({
+    required int? classId,
+    required int dayOfWeek,
+  }) async {
+    if (classId == null) {
+      return null;
+    }
+
+    final queued = await _syncQueue.readQueue();
+    OfflineSyncOperation? operation;
+    for (final item in queued) {
+      if (item.key == _queueKey(classId, dayOfWeek)) {
+        operation = item;
+        break;
+      }
+    }
+    if (operation == null) {
+      return null;
+    }
+
+    final entries = operation.payload['entries'] as List<dynamic>? ?? const [];
+    return {
+      for (final entry in entries.whereType<Map<String, dynamic>>())
+        _parseInt(entry['period_number']):
+            _parseNullableInt(entry['teacher_subject_assignment_id']),
+    };
+  }
+
+  String _queueKey(int classId, int dayOfWeek) =>
+      '$subjectTimetableQueuePrefix$classId:$dayOfWeek';
 
   @override
   Widget build(BuildContext context) {
@@ -230,6 +437,38 @@ class _SubjectTimetableScreenState extends State<SubjectTimetableScreen> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
           children: [
+            if (_statusMessage != null) ...[
+              Container(
+                width: double.infinity,
+                margin: const EdgeInsets.only(bottom: 16),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF4CE),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      _usingOfflineData
+                          ? Icons.cloud_off_outlined
+                          : Icons.sync_problem_outlined,
+                      size: 18,
+                      color: const Color(0xFF7A4F01),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        _statusMessage!,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                              color: const Color(0xFF7A4F01),
+                              fontWeight: FontWeight.w600,
+                            ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             Container(
               padding: const EdgeInsets.all(18),
               decoration: BoxDecoration(
@@ -259,6 +498,7 @@ class _SubjectTimetableScreenState extends State<SubjectTimetableScreen> {
                               _selectedClassId = value;
                               _timetable = null;
                             });
+                            _writeSnapshot();
                           },
                         ),
                         const SizedBox(height: 12),
@@ -281,6 +521,7 @@ class _SubjectTimetableScreenState extends State<SubjectTimetableScreen> {
                               _selectedDay = value;
                               _timetable = null;
                             });
+                            _writeSnapshot();
                           },
                         ),
                         const SizedBox(height: 16),
@@ -358,6 +599,7 @@ class _SubjectTimetableScreenState extends State<SubjectTimetableScreen> {
                                     setState(() {
                                       _selectedAssignments[period.value] = value;
                                     });
+                                    _writeSnapshot();
                                   },
                                 )
                               else
@@ -407,7 +649,13 @@ class _SubjectTimetableScreenState extends State<SubjectTimetableScreen> {
                       FilledButton.icon(
                         onPressed: _saving ? null : _saveTimetable,
                         icon: const Icon(Icons.save_outlined),
-                        label: Text(_saving ? 'Saving...' : 'Save Timetable'),
+                        label: Text(
+                          _saving
+                              ? 'Saving...'
+                              : _hasPendingDraft
+                                  ? 'Sync Timetable'
+                                  : 'Save Timetable',
+                        ),
                       ),
                     ],
                   ],
@@ -430,4 +678,34 @@ class _SubjectTimetableScreenState extends State<SubjectTimetableScreen> {
       ),
     );
   }
+}
+
+const _cacheKey = 'subject_timetable_snapshot';
+
+int _parseInt(dynamic value) {
+  if (value is int) {
+    return value;
+  }
+
+  if (value is double) {
+    return value.round();
+  }
+
+  return int.tryParse('$value') ?? 0;
+}
+
+int? _parseNullableInt(dynamic value) {
+  if (value == null) {
+    return null;
+  }
+
+  if (value is int) {
+    return value;
+  }
+
+  if (value is double) {
+    return value.round();
+  }
+
+  return int.tryParse('$value');
 }

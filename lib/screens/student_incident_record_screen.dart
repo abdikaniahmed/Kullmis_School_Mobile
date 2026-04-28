@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/auth_session.dart';
 import '../models/student_list_models.dart';
 import '../services/laravel_api.dart';
+import '../services/offline_sync_queue.dart';
 
 class StudentIncidentRecordScreen extends StatefulWidget {
   const StudentIncidentRecordScreen({
@@ -25,6 +26,7 @@ class StudentIncidentRecordScreen extends StatefulWidget {
 
 class _StudentIncidentRecordScreenState
     extends State<StudentIncidentRecordScreen> {
+  final OfflineSyncQueue _syncQueue = const OfflineSyncQueue();
   final _whatHappenedController = TextEditingController();
   final _actionTakenController = TextEditingController();
   final _reportedByController = TextEditingController();
@@ -130,24 +132,65 @@ class _StudentIncidentRecordScreenState
 
       Navigator.of(context).pop(true);
     } on ApiException catch (error) {
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        _saving = false;
-        _error = error.message;
-      });
+      await _queueOfflineIncident(
+        currentYearClassId: currentYear.classId!,
+        fallbackMessage: error.message,
+      );
     } catch (_) {
+      await _queueOfflineIncident(
+        currentYearClassId: currentYear.classId!,
+      );
+    }
+  }
+
+  Future<void> _queueOfflineIncident({
+    required int currentYearClassId,
+    String? fallbackMessage,
+  }) async {
+    final whatHappened = _whatHappenedController.text.trim();
+    if (whatHappened.length < 3) {
       if (!mounted) {
         return;
       }
 
       setState(() {
         _saving = false;
-        _error = 'Unable to save discipline incident.';
+        _error = fallbackMessage ?? 'Unable to save discipline incident.';
       });
+      return;
     }
+
+    await _syncQueue.upsert(
+      OfflineSyncOperation(
+        key:
+            '$incidentCreateQueuePrefix${widget.student.id}:${_happenedAt.millisecondsSinceEpoch}',
+        type: 'incident_create',
+        payload: {
+          'student_id': widget.student.id,
+          'class_id': currentYearClassId,
+          'what_happened': whatHappened,
+          'happened_at': _formatDateTime(_happenedAt),
+          'action_taken': _actionTakenController.text.trim(),
+          'reported_by_name':
+              _isSchoolAdmin ? _reportedByController.text.trim() : null,
+        },
+        createdAt: DateTime.now().toIso8601String(),
+      ),
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        const SnackBar(
+          content: Text('Incident saved offline and queued for sync.'),
+        ),
+      );
+
+    Navigator.of(context).pop(true);
   }
 
   @override

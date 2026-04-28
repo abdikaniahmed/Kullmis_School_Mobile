@@ -43,6 +43,7 @@ import 'subject_attendance_screen.dart';
 import 'subject_attendance_report_screen.dart';
 import 'subject_timetable_screen.dart';
 import 'subjects_screen.dart';
+import 'sync_issues_screen.dart';
 import 'tasks_screen.dart';
 import 'teachers_screen.dart';
 import 'terms_screen.dart';
@@ -87,6 +88,7 @@ class _HomeScreenState extends State<HomeScreen> {
   String? _windowTitle;
   Timer? _pendingSyncTimer;
   int _pendingSyncCount = 0;
+  int _syncIssueCount = 0;
 
   @override
   void initState() {
@@ -106,12 +108,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _loadPendingSyncCount() async {
     final count = await _syncQueue.count();
-    if (!mounted || count == _pendingSyncCount) {
+    final issueCount = await _syncQueue.countIssues();
+    if (!mounted ||
+        (count == _pendingSyncCount && issueCount == _syncIssueCount)) {
       return;
     }
 
     setState(() {
       _pendingSyncCount = count;
+      _syncIssueCount = issueCount;
     });
   }
 
@@ -879,6 +884,16 @@ class _HomeScreenState extends State<HomeScreen> {
   List<_SidebarChildLink> _settingsSidebarLinks() {
     final links = <_SidebarChildLink>[];
 
+    links.add(
+      _SidebarChildLink(
+        label: 'Sync Issues',
+        icon: Icons.sync_problem_outlined,
+        onPressed: () => _openScreen(
+          const SyncIssuesScreen(),
+        ),
+      ),
+    );
+
     if (_isSchoolAdmin) {
       links.addAll([
         _SidebarChildLink(
@@ -1279,6 +1294,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final showReachabilityWarning = !widget.isServerReachable;
     if ((message == null || message.isEmpty) &&
         _pendingSyncCount == 0 &&
+        _syncIssueCount == 0 &&
         !showReachabilityWarning) {
       return const SizedBox.shrink();
     }
@@ -1331,9 +1347,25 @@ class _HomeScreenState extends State<HomeScreen> {
                       fontWeight: FontWeight.w600,
                     ),
                   ),
+                if (_syncIssueCount > 0) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    'Sync conflicts need review: $_syncIssueCount',
+                    style: const TextStyle(
+                      color: Color(0xFF7A4F01),
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
+          if (_syncIssueCount > 0)
+            TextButton.icon(
+              onPressed: () async => _openScreen(const SyncIssuesScreen()),
+              icon: const Icon(Icons.visibility_outlined, size: 18),
+              label: const Text('Review'),
+            ),
           if (_pendingSyncCount > 0 || showReachabilityWarning)
             TextButton.icon(
               onPressed:
