@@ -11,6 +11,7 @@ import 'audit_logs_screen.dart';
 import 'backup_restore_screen.dart';
 import 'buses_screen.dart';
 import 'classes_screen.dart';
+import 'class_report_screen.dart';
 import 'documents_screen.dart';
 import 'exam_mark_entry_screen.dart';
 import 'exam_report_screen.dart';
@@ -36,6 +37,8 @@ import 'students_disabled_screen.dart';
 import 'students_graduates_screen.dart';
 import 'students_upload_screen.dart';
 import 'subject_attendance_screen.dart';
+import 'subject_attendance_report_screen.dart';
+import 'subject_timetable_screen.dart';
 import 'subjects_screen.dart';
 import 'tasks_screen.dart';
 import 'teachers_screen.dart';
@@ -82,6 +85,12 @@ class _HomeScreenState extends State<HomeScreen> {
   bool get _canTakeSubjectAttendance => widget.session.hasAnyPermission(const [
         'subject_attendance.view',
         'subject_attendance.create',
+      ]);
+
+  bool get _canViewSubjectTimetable => widget.session.hasAnyPermission(const [
+        'subject_timetable.view',
+        'subject_timetable.create',
+        'subject_timetable.edit',
       ]);
 
   bool get _canViewStudents => widget.session.hasPermission('students.view');
@@ -360,21 +369,44 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   List<_SidebarChildLink> _reportsSidebarLinks() {
-    if (!_canViewExamReports) {
+    if (!_canViewExamReports && !_canTakeSubjectAttendance) {
       return const [];
     }
 
     return <_SidebarChildLink>[
-      _SidebarChildLink(
-        label: 'Exam Reports',
-        icon: Icons.assessment_outlined,
-        onPressed: () => _openScreen(
-          ExamReportScreen(
-            api: widget.api,
-            token: widget.session.token,
+      if (_canViewExamReports)
+        _SidebarChildLink(
+          label: 'Exam Reports',
+          icon: Icons.assessment_outlined,
+          onPressed: () => _openScreen(
+            ExamReportScreen(
+              api: widget.api,
+              token: widget.session.token,
+            ),
           ),
         ),
-      ),
+      if (_canViewExamReports)
+        _SidebarChildLink(
+          label: 'Class Report',
+          icon: Icons.leaderboard_outlined,
+          onPressed: () => _openScreen(
+            ClassReportScreen(
+              api: widget.api,
+              token: widget.session.token,
+            ),
+          ),
+        ),
+      if (_canTakeSubjectAttendance)
+        _SidebarChildLink(
+          label: 'Subject Attendance Report',
+          icon: Icons.analytics_outlined,
+          onPressed: () => _openScreen(
+            SubjectAttendanceReportScreen(
+              api: widget.api,
+              token: widget.session.token,
+            ),
+          ),
+        ),
     ];
   }
 
@@ -466,6 +498,51 @@ class _HomeScreenState extends State<HomeScreen> {
               api: widget.api,
               token: widget.session.token,
               session: widget.session,
+            ),
+          ),
+        ),
+      );
+
+      links.add(
+        _SidebarChildLink(
+          label: 'Subject Attendance Report',
+          icon: Icons.analytics_outlined,
+          onPressed: () => _openScreen(
+            SubjectAttendanceReportScreen(
+              api: widget.api,
+              token: widget.session.token,
+            ),
+          ),
+        ),
+      );
+
+      links.add(
+        _SidebarChildLink(
+          label: 'Class Report',
+          icon: Icons.leaderboard_outlined,
+          onPressed: () => _openScreen(
+            ClassReportScreen(
+              api: widget.api,
+              token: widget.session.token,
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (_canViewSubjectTimetable) {
+      links.add(
+        _SidebarChildLink(
+          label: 'Subject Timetable',
+          icon: Icons.schedule_outlined,
+          onPressed: () => _openScreen(
+            SubjectTimetableScreen(
+              api: widget.api,
+              token: widget.session.token,
+              canEdit: widget.session.hasAnyPermission(const [
+                'subject_timetable.create',
+                'subject_timetable.edit',
+              ]),
             ),
           ),
         ),
@@ -706,6 +783,25 @@ class _HomeScreenState extends State<HomeScreen> {
               api: widget.api,
               token: widget.session.token,
               session: widget.session,
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (_canViewSubjectTimetable) {
+      links.add(
+        _SidebarChildLink(
+          label: 'Subject Timetable',
+          icon: Icons.schedule_outlined,
+          onPressed: () => _openScreen(
+            SubjectTimetableScreen(
+              api: widget.api,
+              token: widget.session.token,
+              canEdit: widget.session.hasAnyPermission(const [
+                'subject_timetable.create',
+                'subject_timetable.edit',
+              ]),
             ),
           ),
         ),

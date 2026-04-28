@@ -14,6 +14,7 @@ import '../models/fee_models.dart';
 import '../models/hr_models.dart';
 import '../models/main_attendance_models.dart';
 import '../models/messaging_models.dart';
+import '../models/school_reports_models.dart';
 import '../models/settings_models.dart';
 import '../models/student_management_models.dart';
 import '../models/student_list_models.dart';
@@ -3036,6 +3037,35 @@ class LaravelApi {
     return ExamReportCard.fromJson(payload);
   }
 
+  Future<ClassReportResponse> classReport({
+    required String token,
+    required int academicYearId,
+    required int classId,
+    int? termId,
+  }) async {
+    final queryParameters = <String, String>{
+      'academic_year_id': '$academicYearId',
+      'class_id': '$classId',
+    };
+
+    if (termId != null) {
+      queryParameters['term_id'] = '$termId';
+    }
+
+    final uri = Uri.parse('$baseUrl/school/report-cards/class')
+        .replace(queryParameters: queryParameters);
+
+    final response = await _client.get(
+      uri,
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    return ClassReportResponse.fromJson(payload);
+  }
+
   Future<void> createStudentDisciplineIncident({
     required String token,
     required int studentId,
@@ -3173,6 +3203,133 @@ class LaravelApi {
     _throwIfNeeded(response, payload);
 
     return SubjectAttendanceSessionData.fromJson(payload);
+  }
+
+  Future<SubjectAttendanceReportResponse> subjectAttendanceReport({
+    required String token,
+    int? academicYearId,
+    int? levelId,
+    int? schoolClassId,
+    String? dateFrom,
+    String? dateTo,
+    int? periodNumber,
+  }) async {
+    final queryParameters = <String, String>{};
+
+    if (academicYearId != null) {
+      queryParameters['academic_year_id'] = '$academicYearId';
+    }
+    if (levelId != null) {
+      queryParameters['level_id'] = '$levelId';
+    }
+    if (schoolClassId != null) {
+      queryParameters['school_class_id'] = '$schoolClassId';
+    }
+    if (dateFrom != null && dateFrom.isNotEmpty) {
+      queryParameters['date_from'] = dateFrom;
+    }
+    if (dateTo != null && dateTo.isNotEmpty) {
+      queryParameters['date_to'] = dateTo;
+    }
+    if (periodNumber != null) {
+      queryParameters['period_number'] = '$periodNumber';
+    }
+
+    final uri = Uri.parse('$baseUrl/school/subject-attendance/report')
+        .replace(queryParameters: queryParameters.isEmpty ? null : queryParameters);
+
+    final response = await _client.get(
+      uri,
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    return SubjectAttendanceReportResponse.fromJson(payload);
+  }
+
+  Future<SubjectTimetableResponse> subjectTimetable({
+    required String token,
+    int? academicYearId,
+    required int schoolClassId,
+    required int dayOfWeek,
+  }) async {
+    final queryParameters = <String, String>{
+      'school_class_id': '$schoolClassId',
+      'day_of_week': '$dayOfWeek',
+    };
+
+    if (academicYearId != null) {
+      queryParameters['academic_year_id'] = '$academicYearId';
+    }
+
+    final uri = Uri.parse('$baseUrl/school/subject-attendance/timetable')
+        .replace(queryParameters: queryParameters);
+
+    final response = await _client.get(
+      uri,
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    return SubjectTimetableResponse.fromJson(payload);
+  }
+
+  Future<SubjectTimetableAssignmentResponse> subjectTimetableAssignments({
+    required String token,
+    int? academicYearId,
+    required int schoolClassId,
+  }) async {
+    final queryParameters = <String, String>{
+      'school_class_id': '$schoolClassId',
+    };
+
+    if (academicYearId != null) {
+      queryParameters['academic_year_id'] = '$academicYearId';
+    }
+
+    final uri = Uri.parse('$baseUrl/school/subject-attendance/timetable/assignments')
+        .replace(queryParameters: queryParameters);
+
+    final response = await _client.get(
+      uri,
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    return SubjectTimetableAssignmentResponse.fromJson(payload);
+  }
+
+  Future<void> saveSubjectTimetable({
+    required String token,
+    int? academicYearId,
+    required int schoolClassId,
+    required int dayOfWeek,
+    required List<SubjectTimetableSaveDraft> entries,
+  }) async {
+    final body = <String, dynamic>{
+      'school_class_id': schoolClassId,
+      'day_of_week': dayOfWeek,
+      'entries': entries.map((item) => item.toJson()).toList(),
+    };
+
+    if (academicYearId != null) {
+      body['academic_year_id'] = academicYearId;
+    }
+
+    final response = await _client.post(
+      Uri.parse('$baseUrl/school/subject-attendance/timetable'),
+      headers: _headers(token: token, jsonRequest: true),
+      body: jsonEncode(body),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
   }
 
   Future<void> saveSubjectAttendanceSession({

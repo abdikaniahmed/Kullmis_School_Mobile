@@ -88,6 +88,14 @@ class ExamSubjectOption {
       type: '${json['type'] ?? ''}'.trim(),
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'type': type,
+    };
+  }
 }
 
 class ClassMarkEntry {
@@ -107,6 +115,14 @@ class ClassMarkEntry {
       mark: _toNullableDouble(json['mark']),
       comment: _toNullableString(json['comment']),
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'student_id': studentId,
+      'mark': mark,
+      'comment': comment,
+    };
   }
 }
 
@@ -422,6 +438,133 @@ class ExamReportOfflineSnapshot {
       'selected_exam_id': selectedExamId,
       'selected_student_id': selectedStudentId,
       'report': report?.toJson(),
+    };
+  }
+}
+
+class ExamMarkDraftState {
+  const ExamMarkDraftState({
+    required this.mark,
+    required this.comment,
+  });
+
+  final String mark;
+  final String comment;
+
+  factory ExamMarkDraftState.fromJson(Map<String, dynamic> json) {
+    return ExamMarkDraftState(
+      mark: '${json['mark'] ?? ''}',
+      comment: '${json['comment'] ?? ''}',
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'mark': mark,
+      'comment': comment,
+    };
+  }
+}
+
+class ExamMarkEntryOfflineSnapshot {
+  const ExamMarkEntryOfflineSnapshot({
+    required this.years,
+    required this.levels,
+    required this.classes,
+    required this.subjects,
+    required this.terms,
+    required this.exams,
+    required this.students,
+    required this.selectedYearId,
+    required this.selectedLevelId,
+    required this.selectedClassId,
+    required this.selectedTermId,
+    required this.selectedExamId,
+    required this.selectedSubjectId,
+    required this.drafts,
+  });
+
+  final List<dynamic> years;
+  final List<dynamic> levels;
+  final List<dynamic> classes;
+  final List<ExamSubjectOption> subjects;
+  final List<ExamTermOption> terms;
+  final List<ExamOption> exams;
+  final List<dynamic> students;
+  final int? selectedYearId;
+  final int? selectedLevelId;
+  final int? selectedClassId;
+  final int? selectedTermId;
+  final int? selectedExamId;
+  final int? selectedSubjectId;
+  final Map<int, ExamMarkDraftState> drafts;
+
+  factory ExamMarkEntryOfflineSnapshot.fromJson(Map<String, dynamic> json) {
+    final draftsJson = json['drafts'] as Map<String, dynamic>? ?? const {};
+
+    return ExamMarkEntryOfflineSnapshot(
+      years: (json['years'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .toList(),
+      levels: (json['levels'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .toList(),
+      classes: (json['classes'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .toList(),
+      subjects: (json['subjects'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(ExamSubjectOption.fromJson)
+          .toList(),
+      terms: (json['terms'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(ExamTermOption.fromJson)
+          .toList(),
+      exams: (json['exams'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(ExamOption.fromJson)
+          .toList(),
+      students: (json['students'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .toList(),
+      selectedYearId: _toNullableInt(json['selected_year_id']),
+      selectedLevelId: _toNullableInt(json['selected_level_id']),
+      selectedClassId: _toNullableInt(json['selected_class_id']),
+      selectedTermId: _toNullableInt(json['selected_term_id']),
+      selectedExamId: _toNullableInt(json['selected_exam_id']),
+      selectedSubjectId: _toNullableInt(json['selected_subject_id']),
+      drafts: {
+        for (final entry in draftsJson.entries)
+          _toInt(entry.key): ExamMarkDraftState.fromJson(
+            entry.value as Map<String, dynamic>? ?? const {},
+          ),
+      },
+    );
+  }
+
+  Map<String, dynamic> toJson({
+    required List<Map<String, dynamic>> years,
+    required List<Map<String, dynamic>> levels,
+    required List<Map<String, dynamic>> classes,
+    required List<Map<String, dynamic>> students,
+  }) {
+    return {
+      'years': years,
+      'levels': levels,
+      'classes': classes,
+      'subjects': subjects.map((item) => item.toJson()).toList(),
+      'terms': terms.map((item) => item.toJson()).toList(),
+      'exams': exams.map((item) => item.toJson()).toList(),
+      'students': students,
+      'selected_year_id': selectedYearId,
+      'selected_level_id': selectedLevelId,
+      'selected_class_id': selectedClassId,
+      'selected_term_id': selectedTermId,
+      'selected_exam_id': selectedExamId,
+      'selected_subject_id': selectedSubjectId,
+      'drafts': {
+        for (final entry in drafts.entries) '${entry.key}': entry.value.toJson(),
+      },
     };
   }
 }

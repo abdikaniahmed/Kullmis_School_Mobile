@@ -5,6 +5,7 @@ import '../models/fee_models.dart';
 import '../models/main_attendance_models.dart';
 import '../models/student_list_models.dart';
 import '../services/laravel_api.dart';
+import '../services/offline_cache_store.dart';
 
 class ExamMarkEntryScreen extends StatefulWidget {
   const ExamMarkEntryScreen({
@@ -23,6 +24,8 @@ class ExamMarkEntryScreen extends StatefulWidget {
 }
 
 class _ExamMarkEntryScreenState extends State<ExamMarkEntryScreen> {
+  final OfflineCacheStore _cacheStore = const FileOfflineCacheStore();
+
   List<AcademicYearOption> _years = const [];
   List<MainAttendanceLevel> _levels = const [];
   List<MainAttendanceClass> _classes = const [];
@@ -41,6 +44,9 @@ class _ExamMarkEntryScreenState extends State<ExamMarkEntryScreen> {
   bool _loadingSetup = true;
   bool _loadingRoster = false;
   bool _saving = false;
+  bool _usingOfflineData = false;
+  bool _hasPendingDraft = false;
+  String? _statusMessage;
   String? _error;
 
   @override
@@ -51,9 +57,7 @@ class _ExamMarkEntryScreenState extends State<ExamMarkEntryScreen> {
 
   @override
   void dispose() {
-    for (final draft in _drafts.values) {
-      draft.dispose();
-    }
+    _disposeDrafts();
     super.dispose();
   }
 
@@ -86,6 +90,7 @@ class _ExamMarkEntryScreenState extends State<ExamMarkEntryScreen> {
     setState(() {
       _loadingSetup = true;
       _error = null;
+      _statusMessage = null;
     });
 
     try {
@@ -126,10 +131,19 @@ class _ExamMarkEntryScreenState extends State<ExamMarkEntryScreen> {
         _selectedClassId = selectedClassId;
         _selectedSubjectId = selectedSubjectId;
         _loadingSetup = false;
+        _usingOfflineData = false;
+        _hasPendingDraft = false;
       });
 
       await _loadTermsAndExams();
     } on ApiException catch (error) {
+      final restored = await _restoreSnapshot(
+        fallbackMessage: 'Offline mode: showing last synced mark-entry data.',
+      );
+      if (restored) {
+        return;
+      }
+
       if (!mounted) {
         return;
       }
@@ -139,6 +153,13 @@ class _ExamMarkEntryScreenState extends State<ExamMarkEntryScreen> {
         _error = error.message;
       });
     } catch (_) {
+      final restored = await _restoreSnapshot(
+        fallbackMessage: 'Offline mode: showing last synced mark-entry data.',
+      );
+      if (restored) {
+        return;
+      }
+
       if (!mounted) {
         return;
       }
@@ -178,6 +199,8 @@ class _ExamMarkEntryScreenState extends State<ExamMarkEntryScreen> {
         _exams = exams;
         _selectedExamId = exams.isNotEmpty ? exams.first.id : null;
       });
+
+      await _writeSnapshot();
     } on ApiException catch (error) {
       if (!mounted) {
         return;
@@ -212,6 +235,8 @@ class _ExamMarkEntryScreenState extends State<ExamMarkEntryScreen> {
             ? _selectedExamId
             : (exams.isNotEmpty ? exams.first.id : null);
       });
+
+      await _writeSnapshot();
     } on ApiException catch (error) {
       if (!mounted) {
         return;
@@ -260,6 +285,7 @@ class _ExamMarkEntryScreenState extends State<ExamMarkEntryScreen> {
     setState(() {
       _loadingRoster = true;
       _error = null;
+      _statusMessage = null;
     });
 
     try {
@@ -283,21 +309,27 @@ class _ExamMarkEntryScreenState extends State<ExamMarkEntryScreen> {
         return;
       }
 
-      _disposeDrafts();
-
-      for (final student in students) {
-        final existing = marksByStudent[student.id];
-        _drafts[student.id] = _MarkDraftControllers(
-          mark: existing?.mark == null ? '' : _formatMark(existing!.mark!),
-          comment: existing?.comment ?? '',
-        );
-      }
+      _replaceDrafts(
+        students,
+        marksByStudent: marksByStudent,
+      );
 
       setState(() {
         _students = students;
         _loadingRoster = false;
+        _usingOfflineData = false;
+        _hasPendingDraft = false;
       });
+
+      await _writeSnapshot();
     } on ApiException catch (error) {
+      final restored = await _restoreSnapshot(
+        fallbackMessage: 'Offline mode: showing last synced mark sheet.',
+      );
+      if (restored) {
+        return;
+      }
+
       if (!mounted) {
         return;
       }
@@ -309,6 +341,13 @@ class _ExamMarkEntryScreenState extends State<ExamMarkEntryScreen> {
         _error = error.message;
       });
     } catch (_) {
+      final restored = await _restoreSnapshot(
+        fallbackMessage: 'Offline mode: showing last synced mark sheet.',
+      );
+      if (restored) {
+        return;
+      }
+
       if (!mounted) {
         return;
       }
@@ -388,6 +427,13 @@ class _ExamMarkEntryScreenState extends State<ExamMarkEntryScreen> {
         return;
       }
 
+      setState(() {
+        _hasPendingDraft = false;
+        _usingOfflineData = false;
+        _statusMessage = null;
+      });
+
+      await _writeSnapshot();
       _showMessage('Exam marks saved.');
       await _loadRoster();
       setState(() {
@@ -398,20 +444,157 @@ class _ExamMarkEntryScreenState extends State<ExamMarkEntryScreen> {
         return;
       }
 
+      await _writeSnapshot(
+        pendingDraft: true,
+        statusMessage:
+            'Offline draft saved on this device. Sync marks again when the server is reachable.',
+      );
+
       _showMessage(error.message);
       setState(() {
         _saving = false;
+        _usingOfflineData = true;
+        _hasPendingDraft = true;
+        _statusMessage =
+            'Offline draft saved on this device. Sync marks again when the server is reachable.';
       });
     } catch (_) {
       if (!mounted) {
         return;
       }
 
-      _showMessage('Failed to save exam marks.');
+      await _writeSnapshot(
+        pendingDraft: true,
+        statusMessage:
+            'Offline draft saved on this device. Sync marks again when the server is reachable.',
+      );
+
+      _showMessage('Exam marks saved locally as a draft.');
       setState(() {
         _saving = false;
+        _usingOfflineData = true;
+        _hasPendingDraft = true;
+        _statusMessage =
+            'Offline draft saved on this device. Sync marks again when the server is reachable.';
       });
     }
+  }
+
+  void _replaceDrafts(
+    List<StudentListItem> students, {
+    Map<int, ClassMarkEntry> marksByStudent = const {},
+    Map<int, ExamMarkDraftState> draftStates = const {},
+  }) {
+    _disposeDrafts();
+
+    for (final student in students) {
+      final savedDraft = draftStates[student.id];
+      final existing = marksByStudent[student.id];
+      _drafts[student.id] = _MarkDraftControllers(
+        mark: savedDraft?.mark ??
+            (existing?.mark == null ? '' : _formatMark(existing!.mark!)),
+        comment: savedDraft?.comment ?? existing?.comment ?? '',
+      );
+    }
+  }
+
+  Future<bool> _restoreSnapshot({
+    required String fallbackMessage,
+  }) async {
+    final json = await _cacheStore.readCacheDocument(_examMarkEntryCacheKey);
+    if (json == null) {
+      return false;
+    }
+
+    final snapshot = ExamMarkEntryOfflineSnapshot.fromJson(json);
+
+    if (!mounted) {
+      return true;
+    }
+
+    final students = snapshot.students
+        .cast<Map<String, dynamic>>()
+        .map(StudentListItem.fromJson)
+        .toList();
+
+    _replaceDrafts(
+      students,
+      draftStates: snapshot.drafts,
+    );
+
+    setState(() {
+      _years = snapshot.years
+          .cast<Map<String, dynamic>>()
+          .map(AcademicYearOption.fromJson)
+          .toList();
+      _levels = snapshot.levels
+          .cast<Map<String, dynamic>>()
+          .map(MainAttendanceLevel.fromJson)
+          .toList();
+      _classes = snapshot.classes
+          .cast<Map<String, dynamic>>()
+          .map(MainAttendanceClass.fromJson)
+          .toList();
+      _subjects = snapshot.subjects;
+      _terms = snapshot.terms;
+      _exams = snapshot.exams;
+      _students = students;
+      _selectedYearId = snapshot.selectedYearId;
+      _selectedLevelId = snapshot.selectedLevelId;
+      _selectedClassId = snapshot.selectedClassId;
+      _selectedTermId = snapshot.selectedTermId;
+      _selectedExamId = snapshot.selectedExamId;
+      _selectedSubjectId = snapshot.selectedSubjectId;
+      _loadingSetup = false;
+      _loadingRoster = false;
+      _saving = false;
+      _usingOfflineData = students.isNotEmpty || snapshot.drafts.isNotEmpty;
+      _hasPendingDraft = snapshot.drafts.isNotEmpty;
+      _statusMessage = snapshot.drafts.isNotEmpty
+          ? 'Offline draft restored. Sync marks again when the server is reachable.'
+          : fallbackMessage;
+      _error = null;
+    });
+
+    return true;
+  }
+
+  Future<void> _writeSnapshot({
+    bool pendingDraft = false,
+    String? statusMessage,
+  }) async {
+    await _cacheStore.writeCacheDocument(
+      _examMarkEntryCacheKey,
+      ExamMarkEntryOfflineSnapshot(
+        years: _years,
+        levels: _levels,
+        classes: _classes,
+        subjects: _subjects,
+        terms: _terms,
+        exams: _exams,
+        students: _students,
+        selectedYearId: _selectedYearId,
+        selectedLevelId: _selectedLevelId,
+        selectedClassId: _selectedClassId,
+        selectedTermId: _selectedTermId,
+        selectedExamId: _selectedExamId,
+        selectedSubjectId: _selectedSubjectId,
+        drafts: {
+          for (final entry in _drafts.entries)
+            entry.key: ExamMarkDraftState(
+              mark: entry.value.markController.text,
+              comment: entry.value.commentController.text,
+            ),
+        },
+      ).toJson(
+        years: _years.map((item) => item.toJson()).toList(),
+        levels: _levels.map((item) => item.toJson()).toList(),
+        classes: _classes.map((item) => item.toJson()).toList(),
+        students: _students.map((item) => item.toJson()).toList(),
+      )
+        ..['pending_draft'] = pendingDraft
+        ..['status_message'] = statusMessage,
+    );
   }
 
   void _disposeDrafts() {
@@ -424,6 +607,9 @@ class _ExamMarkEntryScreenState extends State<ExamMarkEntryScreen> {
   void _clearRoster() {
     _disposeDrafts();
     _students = const [];
+    _usingOfflineData = false;
+    _hasPendingDraft = false;
+    _statusMessage = null;
   }
 
   void _showMessage(String message) {
@@ -463,6 +649,38 @@ class _ExamMarkEntryScreenState extends State<ExamMarkEntryScreen> {
                           'Choose the academic year, exam, class, and subject to enter or update marks.',
                           style: theme.textTheme.bodyMedium,
                         ),
+                        if (_statusMessage != null) ...[
+                          const SizedBox(height: 12),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFFF4CE),
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  _hasPendingDraft
+                                      ? Icons.save_outlined
+                                      : Icons.cloud_off_outlined,
+                                  size: 18,
+                                  color: const Color(0xFF7A4F01),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    _statusMessage!,
+                                    style: theme.textTheme.bodyMedium?.copyWith(
+                                      color: const Color(0xFF7A4F01),
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                         const SizedBox(height: 16),
                         _DropdownField<int>(
                           label: 'Academic Year',
@@ -522,11 +740,12 @@ class _ExamMarkEntryScreenState extends State<ExamMarkEntryScreen> {
                                 ),
                               )
                               .toList(),
-                          onChanged: (value) {
+                          onChanged: (value) async {
                             setState(() {
                               _selectedExamId = value;
                               _clearRoster();
                             });
+                            await _writeSnapshot();
                           },
                         ),
                         const SizedBox(height: 12),
@@ -541,7 +760,7 @@ class _ExamMarkEntryScreenState extends State<ExamMarkEntryScreen> {
                                 ),
                               )
                               .toList(),
-                          onChanged: (value) {
+                          onChanged: (value) async {
                             final classes = _classes
                                 .where((entry) => entry.levelId == value)
                                 .toList();
@@ -551,6 +770,7 @@ class _ExamMarkEntryScreenState extends State<ExamMarkEntryScreen> {
                                   classes.isNotEmpty ? classes.first.id : null;
                               _clearRoster();
                             });
+                            await _writeSnapshot();
                           },
                         ),
                         const SizedBox(height: 12),
@@ -565,11 +785,12 @@ class _ExamMarkEntryScreenState extends State<ExamMarkEntryScreen> {
                                 ),
                               )
                               .toList(),
-                          onChanged: (value) {
+                          onChanged: (value) async {
                             setState(() {
                               _selectedClassId = value;
                               _clearRoster();
                             });
+                            await _writeSnapshot();
                           },
                         ),
                         const SizedBox(height: 12),
@@ -584,21 +805,37 @@ class _ExamMarkEntryScreenState extends State<ExamMarkEntryScreen> {
                                 ),
                               )
                               .toList(),
-                          onChanged: (value) {
+                          onChanged: (value) async {
                             setState(() {
                               _selectedSubjectId = value;
                               _clearRoster();
                             });
+                            await _writeSnapshot();
                           },
                         ),
                         const SizedBox(height: 16),
-                        FilledButton.icon(
-                          onPressed: _loadingRoster ? null : _loadRoster,
-                          icon: const Icon(
-                              Icons.playlist_add_check_circle_outlined),
-                          label: Text(
-                            _loadingRoster ? 'Loading…' : 'Load Mark Sheet',
-                          ),
+                        Wrap(
+                          spacing: 12,
+                          runSpacing: 12,
+                          children: [
+                            FilledButton.icon(
+                              onPressed: _loadingRoster ? null : _loadRoster,
+                              icon: const Icon(
+                                Icons.playlist_add_check_circle_outlined,
+                              ),
+                              label: Text(
+                                _loadingRoster
+                                    ? 'Loading...'
+                                    : 'Load Mark Sheet',
+                              ),
+                            ),
+                            if (_usingOfflineData)
+                              OutlinedButton.icon(
+                                onPressed: _loadingRoster ? null : _loadRoster,
+                                icon: const Icon(Icons.cloud_sync_outlined),
+                                label: const Text('Retry Online'),
+                              ),
+                          ],
                         ),
                         if (_error != null) ...[
                           const SizedBox(height: 12),
@@ -635,7 +872,13 @@ class _ExamMarkEntryScreenState extends State<ExamMarkEntryScreen> {
                     FilledButton.icon(
                       onPressed: _saving ? null : _saveMarks,
                       icon: const Icon(Icons.save_outlined),
-                      label: Text(_saving ? 'Saving…' : 'Save Exam Marks'),
+                      label: Text(
+                        _saving
+                            ? 'Saving...'
+                            : (_hasPendingDraft
+                                ? 'Sync Exam Marks'
+                                : 'Save Exam Marks'),
+                      ),
                     ),
                   ],
                 ),
@@ -691,6 +934,18 @@ class _ExamMarkEntryScreenState extends State<ExamMarkEntryScreen> {
               ),
               keyboardType:
                   const TextInputType.numberWithOptions(decimal: true),
+              onChanged: (_) {
+                setState(() {
+                  _hasPendingDraft = true;
+                  _statusMessage =
+                      'Offline draft saved on this device. Sync marks again when the server is reachable.';
+                });
+                _writeSnapshot(
+                  pendingDraft: true,
+                  statusMessage:
+                      'Offline draft saved on this device. Sync marks again when the server is reachable.',
+                );
+              },
             ),
             const SizedBox(height: 12),
             TextField(
@@ -700,6 +955,18 @@ class _ExamMarkEntryScreenState extends State<ExamMarkEntryScreen> {
                 hintText: 'Optional comment',
               ),
               maxLines: 2,
+              onChanged: (_) {
+                setState(() {
+                  _hasPendingDraft = true;
+                  _statusMessage =
+                      'Offline draft saved on this device. Sync marks again when the server is reachable.';
+                });
+                _writeSnapshot(
+                  pendingDraft: true,
+                  statusMessage:
+                      'Offline draft saved on this device. Sync marks again when the server is reachable.',
+                );
+              },
             ),
           ],
         ),
@@ -755,3 +1022,5 @@ String _formatMark(double value) {
 
   return value.toStringAsFixed(2);
 }
+
+const _examMarkEntryCacheKey = 'exam_mark_entry_snapshot';
