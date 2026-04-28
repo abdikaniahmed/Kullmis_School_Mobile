@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/subject_attendance_models.dart';
 import '../services/laravel_api.dart';
+import '../services/offline_cache_store.dart';
 
 class SubjectAttendanceScreen extends StatefulWidget {
   const SubjectAttendanceScreen({
@@ -26,6 +27,8 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen> {
     'excused'
   ];
 
+  final OfflineCacheStore _cacheStore = const FileOfflineCacheStore();
+
   SubjectAttendanceFilters? _filters;
   SubjectAttendanceSessionData? _session;
   Map<int, _AttendanceDraft> _drafts = const {};
@@ -36,6 +39,9 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen> {
   bool _loadingFilters = true;
   bool _loadingSession = false;
   bool _saving = false;
+  bool _usingOfflineData = false;
+  bool _hasPendingDraft = false;
+  String? _statusMessage;
   String? _error;
 
   @override
@@ -63,6 +69,7 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen> {
     setState(() {
       _loadingFilters = true;
       _error = null;
+      _statusMessage = null;
     });
 
     try {
@@ -82,8 +89,20 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen> {
         _selectedClassId = firstClass?.id;
         _selectedPeriodNumber = firstPeriod;
         _loadingFilters = false;
+        _usingOfflineData = false;
+        _hasPendingDraft = false;
       });
+
+      await _restoreSnapshotIfNeeded(force: true);
     } on ApiException catch (error) {
+      final restored = await _restoreSnapshotIfNeeded(
+        force: true,
+        fallbackMessage: 'Offline mode: showing last synced subject attendance.',
+      );
+      if (restored) {
+        return;
+      }
+
       if (!mounted) {
         return;
       }
@@ -93,6 +112,14 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen> {
         _error = error.message;
       });
     } catch (_) {
+      final restored = await _restoreSnapshotIfNeeded(
+        force: true,
+        fallbackMessage: 'Offline mode: showing last synced subject attendance.',
+      );
+      if (restored) {
+        return;
+      }
+
       if (!mounted) {
         return;
       }
@@ -120,6 +147,8 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen> {
       _selectedDate = picked;
       _clearSession();
     });
+
+    await _writeSnapshot();
   }
 
   Future<void> _loadSession() async {
@@ -135,6 +164,7 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen> {
     setState(() {
       _loadingSession = true;
       _error = null;
+      _statusMessage = null;
     });
 
     try {
@@ -162,8 +192,20 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen> {
             ),
         };
         _loadingSession = false;
+        _saving = false;
+        _usingOfflineData = false;
+        _hasPendingDraft = false;
       });
+
+      await _writeSnapshot();
     } on ApiException catch (error) {
+      final restored = await _restoreSnapshotIfNeeded(
+        fallbackMessage: 'Offline mode: showing last synced subject attendance.',
+      );
+      if (restored) {
+        return;
+      }
+
       if (!mounted) {
         return;
       }
@@ -175,6 +217,13 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen> {
         _error = error.message;
       });
     } catch (_) {
+      final restored = await _restoreSnapshotIfNeeded(
+        fallbackMessage: 'Offline mode: showing last synced subject attendance.',
+      );
+      if (restored) {
+        return;
+      }
+
       if (!mounted) {
         return;
       }
@@ -228,6 +277,13 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen> {
         return;
       }
 
+      setState(() {
+        _hasPendingDraft = false;
+        _usingOfflineData = false;
+        _statusMessage = null;
+      });
+
+      await _writeSnapshot();
       _showMessage('Subject attendance saved.');
       await _loadSession();
     } on ApiException catch (error) {
@@ -235,18 +291,38 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen> {
         return;
       }
 
+      await _writeSnapshot(
+        pendingDraft: true,
+        statusMessage:
+            'Offline draft saved on this device. Sync again when the server is reachable.',
+      );
+
       _showMessage(error.message);
       setState(() {
         _saving = false;
+        _usingOfflineData = true;
+        _hasPendingDraft = true;
+        _statusMessage =
+            'Offline draft saved on this device. Sync again when the server is reachable.';
       });
     } catch (_) {
       if (!mounted) {
         return;
       }
 
-      _showMessage('Failed to save subject attendance.');
+      await _writeSnapshot(
+        pendingDraft: true,
+        statusMessage:
+            'Offline draft saved on this device. Sync again when the server is reachable.',
+      );
+
+      _showMessage('Subject attendance saved locally as a draft.');
       setState(() {
         _saving = false;
+        _usingOfflineData = true;
+        _hasPendingDraft = true;
+        _statusMessage =
+            'Offline draft saved on this device. Sync again when the server is reachable.';
       });
     }
   }
@@ -255,6 +331,129 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen> {
     _session = null;
     _drafts = const {};
     _error = null;
+    _statusMessage = null;
+    _usingOfflineData = false;
+    _hasPendingDraft = false;
+  }
+
+  Future<bool> _restoreSnapshotIfNeeded({
+    bool force = false,
+    String? fallbackMessage,
+  }) async {
+    final json = await _cacheStore.readCacheDocument(_subjectAttendanceCacheKey);
+    if (json == null) {
+      return false;
+    }
+
+    final snapshot = SubjectAttendanceOfflineSnapshot.fromJson(json);
+    if (!force && !_matchesSnapshot(snapshot)) {
+      return false;
+    }
+
+    final selectedDate = DateTime.tryParse(snapshot.selectedDate);
+
+    if (!mounted) {
+      return true;
+    }
+
+    setState(() {
+      _filters = snapshot.filters ?? _filters;
+      _selectedLevelId = snapshot.selectedLevelId;
+      _selectedClassId = snapshot.selectedClassId;
+      _selectedPeriodNumber = snapshot.selectedPeriodNumber;
+      _selectedDate = selectedDate ?? _selectedDate;
+      _session = snapshot.session;
+      _drafts = {
+        for (final entry in snapshot.drafts.entries)
+          entry.key: _AttendanceDraft(
+            status: entry.value.status,
+            remarks: entry.value.remarks,
+          ),
+      };
+      _loadingFilters = false;
+      _loadingSession = false;
+      _saving = false;
+      _usingOfflineData = snapshot.session != null || snapshot.drafts.isNotEmpty;
+      _hasPendingDraft = snapshot.drafts.isNotEmpty;
+      _statusMessage = snapshot.drafts.isNotEmpty
+          ? 'Offline draft restored. Sync again when the server is reachable.'
+          : (fallbackMessage ??
+              'Offline mode: showing last synced subject attendance.');
+      _error = null;
+    });
+
+    return true;
+  }
+
+  bool _matchesSnapshot(SubjectAttendanceOfflineSnapshot snapshot) {
+    return snapshot.selectedLevelId == _selectedLevelId &&
+        snapshot.selectedClassId == _selectedClassId &&
+        snapshot.selectedPeriodNumber == _selectedPeriodNumber &&
+        snapshot.selectedDate == _formatDate(_selectedDate);
+  }
+
+  Future<void> _writeSnapshot({
+    bool pendingDraft = false,
+    String? statusMessage,
+  }) async {
+    await _cacheStore.writeCacheDocument(
+      _subjectAttendanceCacheKey,
+      SubjectAttendanceOfflineSnapshot(
+        filters: _filters,
+        selectedLevelId: _selectedLevelId,
+        selectedClassId: _selectedClassId,
+        selectedPeriodNumber: _selectedPeriodNumber,
+        selectedDate: _formatDate(_selectedDate),
+        session: _session,
+        drafts: {
+          for (final entry in _drafts.entries)
+            entry.key: SubjectAttendanceDraftState(
+              status: entry.value.status,
+              remarks: entry.value.remarks,
+            ),
+        },
+      ).toJson()
+        ..['pending_draft'] = pendingDraft
+        ..['status_message'] = statusMessage,
+    );
+  }
+
+  void _updateDraftStatus(SubjectAttendanceStudent student, String value) {
+    final existing = _drafts[student.id] ??
+        _AttendanceDraft(status: student.status, remarks: student.remarks);
+
+    setState(() {
+      _drafts = {
+        ..._drafts,
+        student.id: existing.copyWith(status: value),
+      };
+      _hasPendingDraft = true;
+    });
+
+    _writeSnapshot(
+      pendingDraft: true,
+      statusMessage:
+          'Offline draft saved on this device. Sync again when the server is reachable.',
+    );
+  }
+
+  void _updateDraftRemarks(SubjectAttendanceStudent student, String value) {
+    final existing = _drafts[student.id] ??
+        _AttendanceDraft(status: student.status, remarks: student.remarks);
+
+    setState(() {
+      _drafts = {
+        ..._drafts,
+        student.id: existing.copyWith(remarks: value),
+      };
+      _hasPendingDraft = true;
+    });
+
+    _writeSnapshot(
+      pendingDraft: true,
+      statusMessage:
+          'Offline draft saved on this device. Sync again when the server is reachable.',
+    );
   }
 
   void _showMessage(String message) {
@@ -294,23 +493,40 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen> {
                           'Choose your class, date, and period to take subject attendance.',
                           style: theme.textTheme.bodyMedium,
                         ),
+                        if (_statusMessage != null) ...[
+                          const SizedBox(height: 12),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFFF4CE),
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  _hasPendingDraft
+                                      ? Icons.save_outlined
+                                      : Icons.cloud_off_outlined,
+                                  size: 18,
+                                  color: const Color(0xFF7A4F01),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    _statusMessage!,
+                                    style: theme.textTheme.bodyMedium?.copyWith(
+                                      color: const Color(0xFF7A4F01),
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                         const SizedBox(height: 18),
                         _buildFilterFields(),
-                        const SizedBox(height: 18),
-                        SizedBox(
-                          width: double.infinity,
-                          child: FilledButton(
-                            onPressed: _loadingSession ? null : _loadSession,
-                            child: _loadingSession
-                                ? const SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child: CircularProgressIndicator(
-                                        strokeWidth: 2),
-                                  )
-                                : const Text('Load Subject Session'),
-                          ),
-                        ),
                         if (_error != null) ...[
                           const SizedBox(height: 14),
                           Text(
@@ -320,6 +536,33 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen> {
                             ),
                           ),
                         ],
+                        const SizedBox(height: 18),
+                        Wrap(
+                          spacing: 12,
+                          runSpacing: 12,
+                          children: [
+                            SizedBox(
+                              width: 240,
+                              child: FilledButton(
+                                onPressed: _loadingSession ? null : _loadSession,
+                                child: _loadingSession
+                                    ? const SizedBox(
+                                        width: 18,
+                                        height: 18,
+                                        child: CircularProgressIndicator(
+                                            strokeWidth: 2),
+                                      )
+                                    : const Text('Load Subject Session'),
+                              ),
+                            ),
+                            if (_usingOfflineData)
+                              OutlinedButton.icon(
+                                onPressed: _loadingSession ? null : _loadSession,
+                                icon: const Icon(Icons.cloud_sync_outlined),
+                                label: const Text('Retry Online'),
+                              ),
+                          ],
+                        ),
                       ],
                     ),
                   ),
@@ -375,6 +618,7 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen> {
                     _selectedClassId = firstClass?.id;
                     _clearSession();
                   });
+                  _writeSnapshot();
                 },
               ),
             ),
@@ -401,6 +645,7 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen> {
                     _selectedClassId = value;
                     _clearSession();
                   });
+                  _writeSnapshot();
                 },
               ),
             ),
@@ -447,6 +692,7 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen> {
                     _selectedPeriodNumber = value;
                     _clearSession();
                   });
+                  _writeSnapshot();
                 },
               ),
             ),
@@ -488,7 +734,7 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen> {
           ),
           const SizedBox(height: 6),
           Text(
-            '${session.schoolClass?.name ?? ''} • ${session.dayLabel} • Period ${session.periodNumber}',
+            '${session.schoolClass?.name ?? ''} - ${session.dayLabel} - Period ${session.periodNumber}',
             style: theme.textTheme.bodyLarge?.copyWith(color: Colors.white70),
           ),
         ],
@@ -527,7 +773,11 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen> {
                       height: 18,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Text('Save Subject Attendance'),
+                  : Text(
+                      _hasPendingDraft
+                          ? 'Sync Subject Attendance'
+                          : 'Save Subject Attendance',
+                    ),
             ),
           ),
         ],
@@ -614,12 +864,7 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen> {
                 return;
               }
 
-              setState(() {
-                _drafts = {
-                  ..._drafts,
-                  student.id: draft.copyWith(status: value),
-                };
-              });
+              _updateDraftStatus(student, value);
             },
           ),
         ),
@@ -633,10 +878,7 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen> {
               contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             ),
             onChanged: (value) {
-              _drafts = {
-                ..._drafts,
-                student.id: draft.copyWith(remarks: value),
-              };
+              _updateDraftRemarks(student, value);
             },
           ),
         ),
@@ -695,3 +937,5 @@ String _titleCase(String value) {
 
   return value[0].toUpperCase() + value.substring(1);
 }
+
+const _subjectAttendanceCacheKey = 'subject_attendance_snapshot';

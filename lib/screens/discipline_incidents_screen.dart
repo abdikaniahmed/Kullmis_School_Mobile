@@ -5,6 +5,7 @@ import '../models/discipline_incident_models.dart';
 import '../models/main_attendance_models.dart';
 import '../models/student_list_models.dart';
 import '../services/laravel_api.dart';
+import '../services/offline_cache_store.dart';
 import 'student_detail_screen.dart';
 
 class DisciplineIncidentsScreen extends StatefulWidget {
@@ -26,6 +27,7 @@ class DisciplineIncidentsScreen extends StatefulWidget {
 
 class _DisciplineIncidentsScreenState extends State<DisciplineIncidentsScreen> {
   final TextEditingController _searchController = TextEditingController();
+  final OfflineCacheStore _cacheStore = const FileOfflineCacheStore();
 
   List<MainAttendanceLevel> _levels = const [];
   List<MainAttendanceClass> _classes = const [];
@@ -35,6 +37,8 @@ class _DisciplineIncidentsScreenState extends State<DisciplineIncidentsScreen> {
   bool _loadingMeta = true;
   bool _loadingClasses = false;
   bool _loadingList = false;
+  bool _usingOfflineData = false;
+  String? _statusMessage;
   String? _error;
 
   @override
@@ -53,6 +57,7 @@ class _DisciplineIncidentsScreenState extends State<DisciplineIncidentsScreen> {
     setState(() {
       _loadingMeta = true;
       _error = null;
+      _statusMessage = null;
     });
 
     try {
@@ -65,10 +70,18 @@ class _DisciplineIncidentsScreenState extends State<DisciplineIncidentsScreen> {
       setState(() {
         _levels = levels;
         _loadingMeta = false;
+        _usingOfflineData = false;
       });
 
       await _loadIncidents(page: 1);
     } on ApiException catch (error) {
+      final restored = await _restoreSnapshot(
+        'Offline mode: showing last synced discipline incidents.',
+      );
+      if (restored) {
+        return;
+      }
+
       if (!mounted) {
         return;
       }
@@ -78,6 +91,13 @@ class _DisciplineIncidentsScreenState extends State<DisciplineIncidentsScreen> {
         _error = error.message;
       });
     } catch (_) {
+      final restored = await _restoreSnapshot(
+        'Offline mode: showing last synced discipline incidents.',
+      );
+      if (restored) {
+        return;
+      }
+
       if (!mounted) {
         return;
       }
@@ -97,6 +117,7 @@ class _DisciplineIncidentsScreenState extends State<DisciplineIncidentsScreen> {
         _classes = const [];
         _selectedClassId = null;
       });
+      await _writeSnapshot();
       return;
     }
 
@@ -121,6 +142,7 @@ class _DisciplineIncidentsScreenState extends State<DisciplineIncidentsScreen> {
             : null;
         _loadingClasses = false;
       });
+      await _writeSnapshot();
     } on ApiException catch (error) {
       if (!mounted) {
         return;
@@ -150,6 +172,7 @@ class _DisciplineIncidentsScreenState extends State<DisciplineIncidentsScreen> {
     setState(() {
       _loadingList = true;
       _error = null;
+      _statusMessage = null;
     });
 
     try {
@@ -168,8 +191,17 @@ class _DisciplineIncidentsScreenState extends State<DisciplineIncidentsScreen> {
       setState(() {
         _page = result;
         _loadingList = false;
+        _usingOfflineData = false;
       });
+      await _writeSnapshot();
     } on ApiException catch (error) {
+      final restored = await _restoreSnapshot(
+        'Offline mode: showing last synced discipline incidents.',
+      );
+      if (restored) {
+        return;
+      }
+
       if (!mounted) {
         return;
       }
@@ -180,6 +212,13 @@ class _DisciplineIncidentsScreenState extends State<DisciplineIncidentsScreen> {
         _error = error.message;
       });
     } catch (_) {
+      final restored = await _restoreSnapshot(
+        'Offline mode: showing last synced discipline incidents.',
+      );
+      if (restored) {
+        return;
+      }
+
       if (!mounted) {
         return;
       }
@@ -213,6 +252,60 @@ class _DisciplineIncidentsScreenState extends State<DisciplineIncidentsScreen> {
     });
 
     await _loadIncidents(page: 1);
+  }
+
+  Future<bool> _restoreSnapshot(String fallbackMessage) async {
+    final json = await _cacheStore.readCacheDocument(_disciplineCacheKey);
+    if (json == null) {
+      return false;
+    }
+
+    final snapshot = DisciplineIncidentsOfflineSnapshot.fromJson(json);
+    _searchController.text = snapshot.search;
+
+    final restoredLevels = snapshot.levels
+        .map((entry) => MainAttendanceLevel.fromJson(entry as Map<String, dynamic>))
+        .toList();
+    final restoredClasses = snapshot.classes
+        .map((entry) => MainAttendanceClass.fromJson(entry as Map<String, dynamic>))
+        .toList();
+
+    if (!mounted) {
+      return true;
+    }
+
+    setState(() {
+      _levels = restoredLevels;
+      _classes = restoredClasses;
+      _page = snapshot.page;
+      _selectedLevelId = snapshot.selectedLevelId;
+      _selectedClassId = snapshot.selectedClassId;
+      _loadingMeta = false;
+      _loadingClasses = false;
+      _loadingList = false;
+      _usingOfflineData = true;
+      _statusMessage = fallbackMessage;
+      _error = null;
+    });
+
+    return true;
+  }
+
+  Future<void> _writeSnapshot() async {
+    await _cacheStore.writeCacheDocument(
+      _disciplineCacheKey,
+      DisciplineIncidentsOfflineSnapshot(
+        levels: _levels.map((entry) => entry.toJson()).toList(),
+        classes: _classes.map((entry) => entry.toJson()).toList(),
+        page: _page,
+        selectedLevelId: _selectedLevelId,
+        selectedClassId: _selectedClassId,
+        search: _searchController.text.trim(),
+      ).toJson(
+        levels: _levels.map((entry) => entry.toJson()).toList(),
+        classes: _classes.map((entry) => entry.toJson()).toList(),
+      ),
+    );
   }
 
   @override
@@ -338,6 +431,13 @@ class _DisciplineIncidentsScreenState extends State<DisciplineIncidentsScreen> {
                             ),
                           ),
                         ],
+                        if (_statusMessage != null) ...[
+                          const SizedBox(height: 14),
+                          _DisciplineOfflineBanner(
+                            message: _statusMessage!,
+                            onRetry: _usingOfflineData ? () => _loadMeta() : null,
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -449,24 +549,61 @@ class _DisciplineIncidentsScreenState extends State<DisciplineIncidentsScreen> {
               Padding(
                 padding: const EdgeInsets.only(top: 12),
                 child: FilledButton.icon(
-                  onPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => StudentDetailScreen(
-                          api: widget.api,
-                          token: widget.token,
-                          session: widget.session,
-                          student: _studentSummaryToListItem(student),
-                        ),
-                      ),
-                    );
-                  },
+                  onPressed: _usingOfflineData
+                      ? null
+                      : () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => StudentDetailScreen(
+                                api: widget.api,
+                                token: widget.token,
+                                session: widget.session,
+                                student: _studentSummaryToListItem(student),
+                              ),
+                            ),
+                          );
+                        },
                   icon: const Icon(Icons.person_outline),
                   label: const Text('Open Student Profile'),
                 ),
               ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _DisciplineOfflineBanner extends StatelessWidget {
+  const _DisciplineOfflineBanner({
+    required this.message,
+    required this.onRetry,
+  });
+
+  final String message;
+  final Future<void> Function()? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFBEAE9),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.cloud_off_outlined, color: Color(0xFFB42318)),
+          const SizedBox(width: 10),
+          Expanded(child: Text(message)),
+          if (onRetry != null)
+            TextButton(
+              onPressed: () {
+                onRetry!();
+              },
+              child: const Text('Retry Online'),
+            ),
+        ],
       ),
     );
   }
@@ -505,3 +642,5 @@ String _formatIncidentDate(String? value) {
   final minute = parsed.minute.toString().padLeft(2, '0');
   return '${parsed.year}-$month-$day $hour:$minute';
 }
+
+const _disciplineCacheKey = 'discipline_incidents_snapshot';

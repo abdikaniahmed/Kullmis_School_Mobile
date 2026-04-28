@@ -145,6 +145,19 @@ class TeacherListPage {
       hasNextPage: json['next_page_url'] != null,
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'data': items.map((item) => item.toJson()).toList(),
+      'current_page': currentPage,
+      'last_page': lastPage,
+      'total': total,
+      'from': from,
+      'to': to,
+      'prev_page_url': hasPreviousPage ? 'cached' : null,
+      'next_page_url': hasNextPage ? 'cached' : null,
+    };
+  }
 }
 
 class TeacherSummary {
@@ -176,6 +189,18 @@ class TeacherSummary {
       classAssignmentsCount: _toInt(json['class_assignments_count']),
       subjectAssignmentsCount: _toInt(json['subject_assignments_count']),
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'email': email,
+      'phone': phone,
+      'position': position,
+      'class_assignments_count': classAssignmentsCount,
+      'subject_assignments_count': subjectAssignmentsCount,
+    };
   }
 }
 
@@ -221,6 +246,18 @@ class TeacherProfile {
       bio: _toNullableString(value['bio']),
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'employee_number': employeeNumber,
+      'qualification': qualification,
+      'specialization': specialization,
+      'joining_date': joiningDate,
+      'experience_years': experienceYears,
+      'status': status,
+      'bio': bio,
+    };
+  }
 }
 
 class TeacherDetail {
@@ -242,6 +279,13 @@ class TeacherDetail {
         teacher is Map<String, dynamic> ? teacher['teacher_profile'] : null,
       ),
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'teacher': teacher.toJson(),
+      'teacher_profile': profile.toJson(),
+    };
   }
 }
 
@@ -282,6 +326,19 @@ class DocumentPage {
       hasPreviousPage: json['prev_page_url'] != null,
       hasNextPage: json['next_page_url'] != null,
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'data': items.map((item) => item.toJson()).toList(),
+      'current_page': currentPage,
+      'last_page': lastPage,
+      'total': total,
+      'from': from,
+      'to': to,
+      'prev_page_url': hasPreviousPage ? 'cached' : null,
+      'next_page_url': hasNextPage ? 'cached' : null,
+    };
   }
 }
 
@@ -342,6 +399,27 @@ class DocumentItem {
       uploadedBy: UserSummary.fromDynamic(json['uploaded_by']),
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'scope': scope,
+      'staff_id': staffId,
+      'category': category,
+      'title': title,
+      'description': description,
+      'status': status,
+      'issued_at': issuedAt,
+      'expires_at': expiresAt,
+      'file_name': fileName,
+      'mime_type': mimeType,
+      'file_size': fileSize,
+      'view_url': viewUrl,
+      'download_url': downloadUrl,
+      'staff': staff?.toJson(),
+      'uploaded_by': uploadedBy?.toJson(),
+    };
+  }
 }
 
 class DocumentCategoryOptions {
@@ -369,6 +447,13 @@ class DocumentCategoryOptions {
       statuses: statuses,
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'categories': categories,
+      'statuses': statuses,
+    };
+  }
 }
 
 class StaffSummary {
@@ -395,6 +480,15 @@ class StaffSummary {
       type: _toNullableString(value['type']),
       position: _toNullableString(value['position']),
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'type': type,
+      'position': position,
+    };
   }
 }
 
@@ -595,6 +689,104 @@ class StaffOfflineSnapshot {
       'page': page?.toJson(),
       'search': search,
       'type_filter': typeFilter,
+    };
+  }
+}
+
+class DocumentsOfflineSnapshot {
+  const DocumentsOfflineSnapshot({
+    required this.options,
+    required this.page,
+    required this.search,
+    required this.staffId,
+    required this.scopeFilter,
+    required this.categoryFilter,
+    required this.statusFilter,
+  });
+
+  final DocumentCategoryOptions? options;
+  final DocumentPage? page;
+  final String search;
+  final String staffId;
+  final String scopeFilter;
+  final String categoryFilter;
+  final String statusFilter;
+
+  factory DocumentsOfflineSnapshot.fromJson(Map<String, dynamic> json) {
+    return DocumentsOfflineSnapshot(
+      options: json['options'] is Map<String, dynamic>
+          ? DocumentCategoryOptions.fromJson(
+              json['options'] as Map<String, dynamic>,
+            )
+          : null,
+      page: json['page'] is Map<String, dynamic>
+          ? DocumentPage.fromJson(json['page'] as Map<String, dynamic>)
+          : null,
+      search: '${json['search'] ?? ''}',
+      staffId: '${json['staff_id'] ?? ''}',
+      scopeFilter: '${json['scope_filter'] ?? ''}',
+      categoryFilter: '${json['category_filter'] ?? ''}',
+      statusFilter: '${json['status_filter'] ?? ''}',
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'options': options?.toJson(),
+      'page': page?.toJson(),
+      'search': search,
+      'staff_id': staffId,
+      'scope_filter': scopeFilter,
+      'category_filter': categoryFilter,
+      'status_filter': statusFilter,
+    };
+  }
+}
+
+class TeachersOfflineSnapshot {
+  const TeachersOfflineSnapshot({
+    required this.page,
+    required this.search,
+  });
+
+  final TeacherListPage? page;
+  final String search;
+
+  factory TeachersOfflineSnapshot.fromJson(Map<String, dynamic> json) {
+    return TeachersOfflineSnapshot(
+      page: json['page'] is Map<String, dynamic>
+          ? TeacherListPage.fromJson(json['page'] as Map<String, dynamic>)
+          : null,
+      search: '${json['search'] ?? ''}',
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'page': page?.toJson(),
+      'search': search,
+    };
+  }
+}
+
+class TeacherDetailOfflineSnapshot {
+  const TeacherDetailOfflineSnapshot({
+    required this.detail,
+  });
+
+  final TeacherDetail detail;
+
+  factory TeacherDetailOfflineSnapshot.fromJson(Map<String, dynamic> json) {
+    return TeacherDetailOfflineSnapshot(
+      detail: TeacherDetail.fromJson(
+        json['detail'] as Map<String, dynamic>? ?? const {},
+      ),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'detail': detail.toJson(),
     };
   }
 }

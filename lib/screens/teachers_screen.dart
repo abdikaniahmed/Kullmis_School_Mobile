@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/auth_session.dart';
 import '../models/hr_models.dart';
 import '../services/laravel_api.dart';
+import '../services/offline_cache_store.dart';
 import 'teacher_detail_screen.dart';
 
 class TeachersScreen extends StatefulWidget {
@@ -23,9 +24,12 @@ class TeachersScreen extends StatefulWidget {
 
 class _TeachersScreenState extends State<TeachersScreen> {
   final TextEditingController _searchController = TextEditingController();
+  final OfflineCacheStore _cacheStore = const FileOfflineCacheStore();
 
   TeacherListPage? _page;
   bool _loading = true;
+  bool _usingOfflineData = false;
+  String? _statusMessage;
   String? _error;
 
   @override
@@ -44,6 +48,7 @@ class _TeachersScreenState extends State<TeachersScreen> {
     setState(() {
       _loading = true;
       _error = null;
+      _statusMessage = null;
     });
 
     try {
@@ -60,8 +65,24 @@ class _TeachersScreenState extends State<TeachersScreen> {
       setState(() {
         _page = result;
         _loading = false;
+        _usingOfflineData = false;
       });
+
+      await _cacheStore.writeCacheDocument(
+        _teachersCacheKey,
+        TeachersOfflineSnapshot(
+          page: _page,
+          search: _searchController.text.trim(),
+        ).toJson(),
+      );
     } on ApiException catch (error) {
+      final restored = await _restoreSnapshot(
+        'Offline mode: showing last synced teachers list.',
+      );
+      if (restored) {
+        return;
+      }
+
       if (!mounted) {
         return;
       }
@@ -72,6 +93,13 @@ class _TeachersScreenState extends State<TeachersScreen> {
         _error = error.message;
       });
     } catch (_) {
+      final restored = await _restoreSnapshot(
+        'Offline mode: showing last synced teachers list.',
+      );
+      if (restored) {
+        return;
+      }
+
       if (!mounted) {
         return;
       }
@@ -82,6 +110,30 @@ class _TeachersScreenState extends State<TeachersScreen> {
         _error = 'Unable to load teachers.';
       });
     }
+  }
+
+  Future<bool> _restoreSnapshot(String fallbackMessage) async {
+    final json = await _cacheStore.readCacheDocument(_teachersCacheKey);
+    if (json == null) {
+      return false;
+    }
+
+    final snapshot = TeachersOfflineSnapshot.fromJson(json);
+    _searchController.text = snapshot.search;
+
+    if (!mounted) {
+      return true;
+    }
+
+    setState(() {
+      _page = snapshot.page;
+      _loading = false;
+      _usingOfflineData = true;
+      _statusMessage = fallbackMessage;
+      _error = null;
+    });
+
+    return true;
   }
 
   Future<void> _openTeacher(TeacherSummary teacher) async {
@@ -107,7 +159,7 @@ class _TeachersScreenState extends State<TeachersScreen> {
         border: Border.all(color: Colors.black.withOpacity(0.08)),
       ),
       child: InkWell(
-        onTap: () => _openTeacher(teacher),
+        onTap: _usingOfflineData ? null : () => _openTeacher(teacher),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -164,6 +216,13 @@ class _TeachersScreenState extends State<TeachersScreen> {
               ),
             ],
           ),
+          if (_statusMessage != null) ...[
+            const SizedBox(height: 12),
+            _TeachersOfflineBanner(
+              message: _statusMessage!,
+              onRetry: _usingOfflineData ? _loadPage : null,
+            ),
+          ],
           const SizedBox(height: 16),
           if (_loading)
             const Center(child: CircularProgressIndicator())
@@ -218,6 +277,41 @@ class _TeachersScreenState extends State<TeachersScreen> {
   }
 }
 
+class _TeachersOfflineBanner extends StatelessWidget {
+  const _TeachersOfflineBanner({
+    required this.message,
+    required this.onRetry,
+  });
+
+  final String message;
+  final Future<void> Function()? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFBEAE9),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.cloud_off_outlined, color: Color(0xFFB42318)),
+          const SizedBox(width: 10),
+          Expanded(child: Text(message)),
+          if (onRetry != null)
+            TextButton(
+              onPressed: () {
+                onRetry!();
+              },
+              child: const Text('Retry Online'),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 class _InfoChip extends StatelessWidget {
   const _InfoChip({required this.label});
 
@@ -235,3 +329,5 @@ class _InfoChip extends StatelessWidget {
     );
   }
 }
+
+const _teachersCacheKey = 'teachers_snapshot';

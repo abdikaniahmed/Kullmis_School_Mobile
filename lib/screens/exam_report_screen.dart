@@ -5,6 +5,7 @@ import '../models/fee_models.dart';
 import '../models/main_attendance_models.dart';
 import '../models/student_list_models.dart';
 import '../services/laravel_api.dart';
+import '../services/offline_cache_store.dart';
 
 class ExamReportScreen extends StatefulWidget {
   const ExamReportScreen({
@@ -21,6 +22,8 @@ class ExamReportScreen extends StatefulWidget {
 }
 
 class _ExamReportScreenState extends State<ExamReportScreen> {
+  final OfflineCacheStore _cacheStore = const FileOfflineCacheStore();
+
   List<AcademicYearOption> _years = const [];
   List<MainAttendanceLevel> _levels = const [];
   List<MainAttendanceClass> _classes = const [];
@@ -37,6 +40,8 @@ class _ExamReportScreenState extends State<ExamReportScreen> {
   bool _loadingSetup = true;
   bool _loadingStudents = false;
   bool _loadingReport = false;
+  bool _usingOfflineData = false;
+  String? _statusMessage;
   String? _error;
   ExamReportCard? _report;
 
@@ -60,6 +65,7 @@ class _ExamReportScreenState extends State<ExamReportScreen> {
     setState(() {
       _loadingSetup = true;
       _error = null;
+      _statusMessage = null;
     });
 
     try {
@@ -92,11 +98,19 @@ class _ExamReportScreenState extends State<ExamReportScreen> {
         _selectedLevelId = firstClass?.levelId;
         _selectedClassId = firstClass?.id;
         _loadingSetup = false;
+        _usingOfflineData = false;
       });
 
       await _loadTermsAndExams();
       await _loadStudents();
     } on ApiException catch (error) {
+      final restored = await _restoreSnapshot(
+        fallbackMessage: 'Offline mode: showing last synced exam report data.',
+      );
+      if (restored) {
+        return;
+      }
+
       if (!mounted) {
         return;
       }
@@ -106,6 +120,13 @@ class _ExamReportScreenState extends State<ExamReportScreen> {
         _error = error.message;
       });
     } catch (_) {
+      final restored = await _restoreSnapshot(
+        fallbackMessage: 'Offline mode: showing last synced exam report data.',
+      );
+      if (restored) {
+        return;
+      }
+
       if (!mounted) {
         return;
       }
@@ -140,8 +161,10 @@ class _ExamReportScreenState extends State<ExamReportScreen> {
       setState(() {
         _terms = terms;
         _exams = exams;
-        _selectedTermId = null;
-        _selectedExamId = null;
+        _selectedTermId =
+            terms.any((entry) => entry.id == _selectedTermId) ? _selectedTermId : null;
+        _selectedExamId =
+            exams.any((entry) => entry.id == _selectedExamId) ? _selectedExamId : null;
       });
     } on ApiException catch (error) {
       if (!mounted) {
@@ -165,6 +188,7 @@ class _ExamReportScreenState extends State<ExamReportScreen> {
       _selectedStudentId = null;
       _report = null;
       _error = null;
+      _statusMessage = null;
     });
 
     try {
@@ -192,8 +216,18 @@ class _ExamReportScreenState extends State<ExamReportScreen> {
         _students = students;
         _selectedStudentId = students.isNotEmpty ? students.first.id : null;
         _loadingStudents = false;
+        _usingOfflineData = false;
       });
+
+      await _writeSnapshot();
     } on ApiException catch (error) {
+      final restored = await _restoreSnapshot(
+        fallbackMessage: 'Offline mode: showing last synced exam report data.',
+      );
+      if (restored) {
+        return;
+      }
+
       if (!mounted) {
         return;
       }
@@ -204,6 +238,13 @@ class _ExamReportScreenState extends State<ExamReportScreen> {
         _error = error.message;
       });
     } catch (_) {
+      final restored = await _restoreSnapshot(
+        fallbackMessage: 'Offline mode: showing last synced exam report data.',
+      );
+      if (restored) {
+        return;
+      }
+
       if (!mounted) {
         return;
       }
@@ -228,6 +269,7 @@ class _ExamReportScreenState extends State<ExamReportScreen> {
     setState(() {
       _loadingReport = true;
       _error = null;
+      _statusMessage = null;
     });
 
     try {
@@ -246,8 +288,18 @@ class _ExamReportScreenState extends State<ExamReportScreen> {
       setState(() {
         _report = report;
         _loadingReport = false;
+        _usingOfflineData = false;
       });
+
+      await _writeSnapshot();
     } on ApiException catch (error) {
+      final restored = await _restoreSnapshot(
+        fallbackMessage: 'Offline mode: showing last synced exam report data.',
+      );
+      if (restored) {
+        return;
+      }
+
       if (!mounted) {
         return;
       }
@@ -258,6 +310,13 @@ class _ExamReportScreenState extends State<ExamReportScreen> {
         _error = error.message;
       });
     } catch (_) {
+      final restored = await _restoreSnapshot(
+        fallbackMessage: 'Offline mode: showing last synced exam report data.',
+      );
+      if (restored) {
+        return;
+      }
+
       if (!mounted) {
         return;
       }
@@ -268,6 +327,83 @@ class _ExamReportScreenState extends State<ExamReportScreen> {
         _error = 'Unable to load the exam report.';
       });
     }
+  }
+
+  Future<bool> _restoreSnapshot({
+    required String fallbackMessage,
+  }) async {
+    final json = await _cacheStore.readCacheDocument(_examReportCacheKey);
+    if (json == null) {
+      return false;
+    }
+
+    final snapshot = ExamReportOfflineSnapshot.fromJson(json);
+
+    if (!mounted) {
+      return true;
+    }
+
+    setState(() {
+      _years = snapshot.years
+          .cast<Map<String, dynamic>>()
+          .map(AcademicYearOption.fromJson)
+          .toList();
+      _levels = snapshot.levels
+          .cast<Map<String, dynamic>>()
+          .map(MainAttendanceLevel.fromJson)
+          .toList();
+      _classes = snapshot.classes
+          .cast<Map<String, dynamic>>()
+          .map(MainAttendanceClass.fromJson)
+          .toList();
+      _terms = snapshot.terms;
+      _exams = snapshot.exams;
+      _students = snapshot.students
+          .cast<Map<String, dynamic>>()
+          .map(StudentListItem.fromJson)
+          .toList();
+      _selectedYearId = snapshot.selectedYearId;
+      _selectedLevelId = snapshot.selectedLevelId;
+      _selectedClassId = snapshot.selectedClassId;
+      _selectedTermId = snapshot.selectedTermId;
+      _selectedExamId = snapshot.selectedExamId;
+      _selectedStudentId = snapshot.selectedStudentId;
+      _report = snapshot.report;
+      _loadingSetup = false;
+      _loadingStudents = false;
+      _loadingReport = false;
+      _usingOfflineData = true;
+      _statusMessage = fallbackMessage;
+      _error = null;
+    });
+
+    return true;
+  }
+
+  Future<void> _writeSnapshot() async {
+    await _cacheStore.writeCacheDocument(
+      _examReportCacheKey,
+      ExamReportOfflineSnapshot(
+        years: _years,
+        levels: _levels,
+        classes: _classes,
+        terms: _terms,
+        exams: _exams,
+        students: _students,
+        selectedYearId: _selectedYearId,
+        selectedLevelId: _selectedLevelId,
+        selectedClassId: _selectedClassId,
+        selectedTermId: _selectedTermId,
+        selectedExamId: _selectedExamId,
+        selectedStudentId: _selectedStudentId,
+        report: _report,
+      ).toJson(
+        years: _years.map((item) => item.toJson()).toList(),
+        levels: _levels.map((item) => item.toJson()).toList(),
+        classes: _classes.map((item) => item.toJson()).toList(),
+        students: _students.map((item) => item.toJson()).toList(),
+      ),
+    );
   }
 
   void _showMessage(String message) {
@@ -307,6 +443,36 @@ class _ExamReportScreenState extends State<ExamReportScreen> {
                           'Choose a student and optionally narrow the report to one term or one exam.',
                           style: theme.textTheme.bodyMedium,
                         ),
+                        if (_statusMessage != null) ...[
+                          const SizedBox(height: 12),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFFF4CE),
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(
+                                  Icons.cloud_off_outlined,
+                                  size: 18,
+                                  color: Color(0xFF7A4F01),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    _statusMessage!,
+                                    style: theme.textTheme.bodyMedium?.copyWith(
+                                      color: const Color(0xFF7A4F01),
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                         const SizedBox(height: 16),
                         _DropdownField<int>(
                           label: 'Academic Year',
@@ -327,6 +493,7 @@ class _ExamReportScreenState extends State<ExamReportScreen> {
                               _report = null;
                             });
                             await _loadTermsAndExams();
+                            await _writeSnapshot();
                           },
                         ),
                         const SizedBox(height: 12),
@@ -394,12 +561,13 @@ class _ExamReportScreenState extends State<ExamReportScreen> {
                               ),
                             ),
                           ],
-                          onChanged: (value) {
+                          onChanged: (value) async {
                             setState(() {
                               _selectedTermId = value;
                               _selectedExamId = null;
                               _report = null;
                             });
+                            await _writeSnapshot();
                           },
                         ),
                         const SizedBox(height: 12),
@@ -424,11 +592,12 @@ class _ExamReportScreenState extends State<ExamReportScreen> {
                                   ),
                                 ),
                           ],
-                          onChanged: (value) {
+                          onChanged: (value) async {
                             setState(() {
                               _selectedExamId = value;
                               _report = null;
                             });
+                            await _writeSnapshot();
                           },
                         ),
                         const SizedBox(height: 12),
@@ -445,19 +614,35 @@ class _ExamReportScreenState extends State<ExamReportScreen> {
                                 ),
                               )
                               .toList(),
-                          onChanged: (value) {
+                          onChanged: (value) async {
                             setState(() {
                               _selectedStudentId = value;
                               _report = null;
                             });
+                            await _writeSnapshot();
                           },
                         ),
                         const SizedBox(height: 16),
-                        FilledButton.icon(
-                          onPressed: _loadingReport ? null : _loadReport,
-                          icon: const Icon(Icons.assessment_outlined),
-                          label: Text(
-                              _loadingReport ? 'Loading…' : 'Load Exam Report'),
+                        Wrap(
+                          spacing: 12,
+                          runSpacing: 12,
+                          children: [
+                            FilledButton.icon(
+                              onPressed: _loadingReport ? null : _loadReport,
+                              icon: const Icon(Icons.assessment_outlined),
+                              label: Text(
+                                _loadingReport
+                                    ? 'Loading...'
+                                    : 'Load Exam Report',
+                              ),
+                            ),
+                            if (_usingOfflineData)
+                              OutlinedButton.icon(
+                                onPressed: _loadingReport ? null : _loadReport,
+                                icon: const Icon(Icons.cloud_sync_outlined),
+                                label: const Text('Retry Online'),
+                              ),
+                          ],
                         ),
                         if (_error != null) ...[
                           const SizedBox(height: 12),
@@ -611,8 +796,7 @@ class _ReportSummary extends StatelessWidget {
         spacing: 12,
         runSpacing: 12,
         children: [
-          _MetricTile(
-              label: 'Total', value: _formatMetric(report.summary.total)),
+          _MetricTile(label: 'Total', value: _formatMetric(report.summary.total)),
           _MetricTile(
             label: 'Average',
             value: _formatMetric(report.summary.average),
@@ -720,8 +904,10 @@ String _formatMetric(double value) {
 
 String _formatExamMark(double? value) {
   if (value == null) {
-    return '—';
+    return '-';
   }
 
   return _formatMetric(value);
 }
+
+const _examReportCacheKey = 'exam_report_snapshot';

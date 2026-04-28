@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/auth_session.dart';
 import '../models/hr_models.dart';
 import '../services/laravel_api.dart';
+import '../services/offline_cache_store.dart';
 
 class TeacherDetailScreen extends StatefulWidget {
   const TeacherDetailScreen({
@@ -31,6 +32,7 @@ class _TeacherDetailScreenState extends State<TeacherDetailScreen> {
   final TextEditingController _joiningController = TextEditingController();
   final TextEditingController _experienceController = TextEditingController();
   final TextEditingController _bioController = TextEditingController();
+  final OfflineCacheStore _cacheStore = const FileOfflineCacheStore();
 
   static const List<String> _statuses = [
     'active',
@@ -42,6 +44,8 @@ class _TeacherDetailScreenState extends State<TeacherDetailScreen> {
   String _status = _statuses.first;
   bool _loading = true;
   bool _saving = false;
+  bool _usingOfflineData = false;
+  String? _statusMessage;
   String? _error;
 
   bool get _canEdit =>
@@ -69,6 +73,7 @@ class _TeacherDetailScreenState extends State<TeacherDetailScreen> {
     setState(() {
       _loading = true;
       _error = null;
+      _statusMessage = null;
     });
 
     try {
@@ -94,8 +99,21 @@ class _TeacherDetailScreenState extends State<TeacherDetailScreen> {
             ? detail.profile.status!
             : _statuses.first;
         _loading = false;
+        _usingOfflineData = false;
       });
+
+      await _cacheStore.writeCacheDocument(
+        _teacherDetailCacheKey(widget.teacherId),
+        TeacherDetailOfflineSnapshot(detail: detail).toJson(),
+      );
     } on ApiException catch (error) {
+      final restored = await _restoreSnapshot(
+        'Offline mode: showing last synced teacher profile.',
+      );
+      if (restored) {
+        return;
+      }
+
       if (!mounted) {
         return;
       }
@@ -105,6 +123,13 @@ class _TeacherDetailScreenState extends State<TeacherDetailScreen> {
         _error = error.message;
       });
     } catch (_) {
+      final restored = await _restoreSnapshot(
+        'Offline mode: showing last synced teacher profile.',
+      );
+      if (restored) {
+        return;
+      }
+
       if (!mounted) {
         return;
       }
@@ -116,8 +141,43 @@ class _TeacherDetailScreenState extends State<TeacherDetailScreen> {
     }
   }
 
+  Future<bool> _restoreSnapshot(String fallbackMessage) async {
+    final json = await _cacheStore.readCacheDocument(
+      _teacherDetailCacheKey(widget.teacherId),
+    );
+    if (json == null) {
+      return false;
+    }
+
+    final snapshot = TeacherDetailOfflineSnapshot.fromJson(json);
+    final detail = snapshot.detail;
+
+    if (!mounted) {
+      return true;
+    }
+
+    setState(() {
+      _detail = detail;
+      _employeeController.text = detail.profile.employeeNumber ?? '';
+      _qualificationController.text = detail.profile.qualification ?? '';
+      _specializationController.text = detail.profile.specialization ?? '';
+      _joiningController.text = detail.profile.joiningDate ?? '';
+      _experienceController.text = detail.profile.experienceYears?.toString() ?? '';
+      _bioController.text = detail.profile.bio ?? '';
+      _status = _statuses.contains(detail.profile.status)
+          ? detail.profile.status!
+          : _statuses.first;
+      _loading = false;
+      _usingOfflineData = true;
+      _statusMessage = fallbackMessage;
+      _error = null;
+    });
+
+    return true;
+  }
+
   Future<void> _saveProfile() async {
-    if (!_canEdit) {
+    if (!_canEdit || _usingOfflineData) {
       return;
     }
 
@@ -229,6 +289,13 @@ class _TeacherDetailScreenState extends State<TeacherDetailScreen> {
                 const SizedBox(height: 6),
                 Text(teacher.email ?? 'No email'),
                 Text(teacher.phone ?? 'No phone'),
+                if (_statusMessage != null) ...[
+                  const SizedBox(height: 12),
+                  _TeacherOfflineBanner(
+                    message: _statusMessage!,
+                    onRetry: _usingOfflineData ? _loadTeacher : null,
+                  ),
+                ],
               ],
             ),
           ),
@@ -328,7 +395,7 @@ class _TeacherDetailScreenState extends State<TeacherDetailScreen> {
           if (_canEdit) ...[
             const SizedBox(height: 16),
             FilledButton(
-              onPressed: _saving ? null : _saveProfile,
+              onPressed: _saving || _usingOfflineData ? null : _saveProfile,
               child: Text(_saving ? 'Saving...' : 'Save profile'),
             ),
           ],
@@ -337,3 +404,40 @@ class _TeacherDetailScreenState extends State<TeacherDetailScreen> {
     );
   }
 }
+
+class _TeacherOfflineBanner extends StatelessWidget {
+  const _TeacherOfflineBanner({
+    required this.message,
+    required this.onRetry,
+  });
+
+  final String message;
+  final Future<void> Function()? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFBEAE9),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.cloud_off_outlined, color: Color(0xFFB42318)),
+          const SizedBox(width: 10),
+          Expanded(child: Text(message)),
+          if (onRetry != null)
+            TextButton(
+              onPressed: () {
+                onRetry!();
+              },
+              child: const Text('Retry Online'),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+String _teacherDetailCacheKey(int teacherId) => 'teacher_detail_$teacherId';

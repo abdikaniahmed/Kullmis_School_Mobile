@@ -19,6 +19,15 @@ class ExamTermOption {
       isActive: _toBool(json['is_active']),
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'academic_year_id': academicYearId,
+      'is_active': isActive,
+    };
+  }
 }
 
 class ExamOption {
@@ -47,6 +56,17 @@ class ExamOption {
       maxMark: _toDouble(json['max_mark']),
       weight: _toNullableDouble(json['weight']),
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'term_id': termId,
+      'order_n': orderNumber,
+      'max_mark': maxMark,
+      'weight': weight,
+    };
   }
 }
 
@@ -172,6 +192,20 @@ class ExamReportCard {
       ),
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'student': student.toJson(),
+      'academic_year': academicYear,
+      'term_name': termName,
+      'exam_name': examName,
+      'date': date,
+      'exams': exams.map((item) => item.toJson()).toList(),
+      'subjects': subjects.map((item) => item.toJson()).toList(),
+      'final_score': finalScore,
+      'summary': summary.toJson(),
+    };
+  }
 }
 
 class ExamReportStudent {
@@ -195,6 +229,14 @@ class ExamReportStudent {
       levelName: '${json['level_name'] ?? '—'}'.trim(),
     );
   }
+  Map<String, dynamic> toJson() {
+    return {
+      'name': name,
+      'roll_number': rollNumber,
+      'class_name': className,
+      'level_name': levelName,
+    };
+  }
 }
 
 class ExamReportHeader {
@@ -211,6 +253,13 @@ class ExamReportHeader {
       id: _toInt(json['id']),
       name: '${json['name'] ?? ''}'.trim(),
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+    };
   }
 }
 
@@ -244,6 +293,16 @@ class ExamReportSubject {
       total: _toDouble(json['total']),
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'subject': subject,
+      'exams_map': {
+        for (final entry in examsMap.entries) '${entry.key}': entry.value,
+      },
+      'total': total,
+    };
+  }
 }
 
 class ExamReportSummary {
@@ -266,6 +325,104 @@ class ExamReportSummary {
       percentage: _toDouble(json['percentage']),
       grade: '${json['grade'] ?? ''}'.trim(),
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'total': total,
+      'average': average,
+      'percentage': percentage,
+      'grade': grade,
+    };
+  }
+}
+
+class ExamReportOfflineSnapshot {
+  const ExamReportOfflineSnapshot({
+    required this.years,
+    required this.levels,
+    required this.classes,
+    required this.terms,
+    required this.exams,
+    required this.students,
+    required this.selectedYearId,
+    required this.selectedLevelId,
+    required this.selectedClassId,
+    required this.selectedTermId,
+    required this.selectedExamId,
+    required this.selectedStudentId,
+    required this.report,
+  });
+
+  final List<dynamic> years;
+  final List<dynamic> levels;
+  final List<dynamic> classes;
+  final List<ExamTermOption> terms;
+  final List<ExamOption> exams;
+  final List<dynamic> students;
+  final int? selectedYearId;
+  final int? selectedLevelId;
+  final int? selectedClassId;
+  final int? selectedTermId;
+  final int? selectedExamId;
+  final int? selectedStudentId;
+  final ExamReportCard? report;
+
+  factory ExamReportOfflineSnapshot.fromJson(Map<String, dynamic> json) {
+    return ExamReportOfflineSnapshot(
+      years: (json['years'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .toList(),
+      levels: (json['levels'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .toList(),
+      classes: (json['classes'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .toList(),
+      terms: (json['terms'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(ExamTermOption.fromJson)
+          .toList(),
+      exams: (json['exams'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(ExamOption.fromJson)
+          .toList(),
+      students: (json['students'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .toList(),
+      selectedYearId: _toNullableInt(json['selected_year_id']),
+      selectedLevelId: _toNullableInt(json['selected_level_id']),
+      selectedClassId: _toNullableInt(json['selected_class_id']),
+      selectedTermId: _toNullableInt(json['selected_term_id']),
+      selectedExamId: _toNullableInt(json['selected_exam_id']),
+      selectedStudentId: _toNullableInt(json['selected_student_id']),
+      report: json['report'] is Map<String, dynamic>
+          ? ExamReportCard.fromJson(json['report'] as Map<String, dynamic>)
+          : null,
+    );
+  }
+
+  Map<String, dynamic> toJson({
+    required List<Map<String, dynamic>> years,
+    required List<Map<String, dynamic>> levels,
+    required List<Map<String, dynamic>> classes,
+    required List<Map<String, dynamic>> students,
+  }) {
+    return {
+      'years': years,
+      'levels': levels,
+      'classes': classes,
+      'terms': terms.map((item) => item.toJson()).toList(),
+      'exams': exams.map((item) => item.toJson()).toList(),
+      'students': students,
+      'selected_year_id': selectedYearId,
+      'selected_level_id': selectedLevelId,
+      'selected_class_id': selectedClassId,
+      'selected_term_id': selectedTermId,
+      'selected_exam_id': selectedExamId,
+      'selected_student_id': selectedStudentId,
+      'report': report?.toJson(),
+    };
   }
 }
 

@@ -1,3 +1,5 @@
+import 'discipline_incident_models.dart';
+
 class StudentProfile {
   const StudentProfile({
     required this.id,
@@ -46,6 +48,24 @@ class StudentProfile {
       currentYear: StudentAcademicAssignment.fromDynamic(json['current_year']),
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'phone': phone,
+      'second_phone': secondPhone,
+      'gender': gender,
+      'student_type': studentType,
+      'fee_type': feeType,
+      'address': address,
+      'bus_assign': busAssign,
+      'blood_type': bloodType,
+      'disabled_at': disabledAt,
+      'disable_reason': disableReason,
+      'current_year': currentYear?.toJson(),
+    };
+  }
 }
 
 class StudentAcademicAssignment {
@@ -91,6 +111,19 @@ class StudentAcademicAssignment {
           ? _toNullableString(schoolClass['name'])
           : null,
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'academic_year_id': academicYearId,
+      'level_id': levelId,
+      'school_class_id': classId,
+      'roll_number': rollNumber,
+      'status': status,
+      'level': levelName == null ? null : {'name': levelName},
+      'school_class': className == null ? null : {'name': className},
+    };
   }
 }
 
@@ -591,6 +624,39 @@ class StudentImportResult {
           .map(StudentImportError.fromJson)
           .toList(),
     );
+  }
+}
+
+class StudentDetailOfflineSnapshot {
+  const StudentDetailOfflineSnapshot({
+    required this.studentListItem,
+    required this.profile,
+    required this.report,
+  });
+
+  final Map<String, dynamic> studentListItem;
+  final StudentProfile? profile;
+  final StudentIncidentReport? report;
+
+  factory StudentDetailOfflineSnapshot.fromJson(Map<String, dynamic> json) {
+    return StudentDetailOfflineSnapshot(
+      studentListItem:
+          json['student_list_item'] as Map<String, dynamic>? ?? const {},
+      profile: json['profile'] is Map<String, dynamic>
+          ? StudentProfile.fromJson(json['profile'] as Map<String, dynamic>)
+          : null,
+      report: json['report'] is Map<String, dynamic>
+          ? StudentIncidentReport.fromJson(json['report'] as Map<String, dynamic>)
+          : null,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'student_list_item': studentListItem,
+      'profile': profile?.toJson(),
+      'report': report?.toJson(),
+    };
   }
 }
 

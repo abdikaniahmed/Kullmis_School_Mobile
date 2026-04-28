@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import '../models/auth_session.dart';
 import '../models/discipline_incident_models.dart';
 import '../models/student_list_models.dart';
+import '../models/student_management_models.dart';
 import '../services/laravel_api.dart';
+import '../services/offline_cache_store.dart';
 import 'student_incident_record_screen.dart';
 
 class StudentDetailScreen extends StatefulWidget {
@@ -25,8 +27,14 @@ class StudentDetailScreen extends StatefulWidget {
 }
 
 class _StudentDetailScreenState extends State<StudentDetailScreen> {
+  final OfflineCacheStore _cacheStore = const FileOfflineCacheStore();
+
+  StudentProfile? _profile;
   StudentIncidentReport? _report;
-  bool _loadingReport = false;
+  bool _loading = true;
+  bool _refreshingReport = false;
+  bool _usingOfflineData = false;
+  String? _statusMessage;
   String? _error;
 
   bool get _canRecordIncident =>
@@ -35,70 +43,148 @@ class _StudentDetailScreenState extends State<StudentDetailScreen> {
   bool get _canViewIncidentReport =>
       widget.session.hasPermission('discipline_incidents.report.view');
 
-  StudentCurrentYear? get _currentYear => widget.student.currentYear;
+  StudentAcademicAssignment? get _currentYear =>
+      _profile?.currentYear ?? _toAcademicAssignment(widget.student.currentYear);
 
   @override
   void initState() {
     super.initState();
-    if (_canViewIncidentReport) {
-      _loadReport();
-    }
+    _loadData();
   }
 
-  Future<void> _loadReport() async {
-    final currentYear = _currentYear;
-
-    if (currentYear == null || currentYear.classId == null) {
-      setState(() {
-        _error = 'This student does not have an active class assignment.';
-      });
-      return;
-    }
-
+  Future<void> _loadData({bool reportOnly = false}) async {
     setState(() {
-      _loadingReport = true;
+      if (reportOnly) {
+        _refreshingReport = true;
+      } else {
+        _loading = true;
+      }
       _error = null;
+      _statusMessage = null;
     });
 
     try {
-      final report = await widget.api.studentDisciplineIncidentReport(
-        token: widget.token,
-        classId: currentYear.classId!,
-        studentId: widget.student.id,
-      );
+      final profile = reportOnly
+          ? (_profile ??
+              await widget.api.studentDetail(
+                token: widget.token,
+                studentId: widget.student.id,
+              ))
+          : await widget.api.studentDetail(
+              token: widget.token,
+              studentId: widget.student.id,
+            );
+
+      StudentIncidentReport? report = _report;
+      if (_canViewIncidentReport) {
+        final currentYear =
+            profile.currentYear ?? _toAcademicAssignment(widget.student.currentYear);
+        final classId = currentYear?.classId;
+        if (classId == null) {
+          report = null;
+        } else {
+          report = await widget.api.studentDisciplineIncidentReport(
+            token: widget.token,
+            classId: classId,
+            studentId: widget.student.id,
+          );
+        }
+      }
 
       if (!mounted) {
         return;
       }
 
       setState(() {
+        _profile = profile;
         _report = report;
-        _loadingReport = false;
+        _loading = false;
+        _refreshingReport = false;
+        _usingOfflineData = false;
       });
+
+      await _writeSnapshot();
     } on ApiException catch (error) {
+      final restored = await _restoreSnapshot(
+        fallbackMessage: 'Offline mode: showing last synced student profile.',
+      );
+      if (restored) {
+        return;
+      }
+
       if (!mounted) {
         return;
       }
 
       setState(() {
-        _report = null;
-        _loadingReport = false;
+        _loading = false;
+        _refreshingReport = false;
         _error = error.message;
       });
     } catch (_) {
+      final restored = await _restoreSnapshot(
+        fallbackMessage: 'Offline mode: showing last synced student profile.',
+      );
+      if (restored) {
+        return;
+      }
+
       if (!mounted) {
         return;
       }
 
       setState(() {
-        _report = null;
-        _loadingReport = false;
-        _error = 'Unable to load the student incident report.';
+        _loading = false;
+        _refreshingReport = false;
+        _error = 'Unable to load the student profile.';
       });
     }
   }
 
+  Future<bool> _restoreSnapshot({
+    required String fallbackMessage,
+  }) async {
+    final json = await _cacheStore.readCacheDocument(_cacheKey(widget.student.id));
+    if (json == null) {
+      return false;
+    }
+
+    final snapshot = StudentDetailOfflineSnapshot.fromJson(json);
+
+    if (!mounted) {
+      return true;
+    }
+
+    setState(() {
+      _profile = snapshot.profile;
+      _report = snapshot.report;
+      _loading = false;
+      _refreshingReport = false;
+      _usingOfflineData = true;
+      _statusMessage = fallbackMessage;
+      _error = null;
+    });
+
+    return true;
+  }
+
+  Future<void> _writeSnapshot() async {
+    await _cacheStore.writeCacheDocument(
+      _cacheKey(widget.student.id),
+      StudentDetailOfflineSnapshot(
+        studentListItem: widget.student.toJson(),
+        profile: _profile,
+        report: _report,
+      ).toJson(),
+    );
+  }
+
   Future<void> _openIncidentRecorder() async {
+    if (_usingOfflineData) {
+      _showMessage('Reconnect to record a new incident.');
+      return;
+    }
+
     final created = await Navigator.of(context).push<bool>(
       MaterialPageRoute<bool>(
         builder: (_) => StudentIncidentRecordScreen(
@@ -111,152 +197,260 @@ class _StudentDetailScreenState extends State<StudentDetailScreen> {
     );
 
     if (created == true && mounted && _canViewIncidentReport) {
-      await _loadReport();
+      await _loadData(reportOnly: true);
     }
+  }
+
+  void _showMessage(String message) {
+    if (!mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final profile = _profile;
     final currentYear = _currentYear;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Student Profile'),
       ),
-      body: RefreshIndicator(
-        onRefresh: _canViewIncidentReport ? _loadReport : () async {},
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-          children: [
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [
-                    Color(0xFF115E59),
-                    Color(0xFF0F766E),
-                    Color(0xFF134E4A)
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(24),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : RefreshIndicator(
+              onRefresh: () => _loadData(),
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
                 children: [
-                  Text(
-                    widget.student.name,
-                    style: theme.textTheme.headlineMedium?.copyWith(
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [
+                          Color(0xFF115E59),
+                          Color(0xFF0F766E),
+                          Color(0xFF134E4A),
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          profile?.name ?? widget.student.name,
+                          style: theme.textTheme.headlineMedium?.copyWith(
+                            color: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          profile?.phone ?? widget.student.phone ?? '-',
+                          style: theme.textTheme.bodyLarge?.copyWith(
+                            color: Colors.white70,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Wrap(
+                          spacing: 12,
+                          runSpacing: 12,
+                          children: [
+                            _InfoChip(
+                              label: 'Roll',
+                              value: currentYear?.rollNumber ?? '-',
+                            ),
+                            _InfoChip(
+                              label: 'Level',
+                              value: currentYear?.levelName ?? '-',
+                            ),
+                            _InfoChip(
+                              label: 'Class',
+                              value: currentYear?.className ?? '-',
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (_statusMessage != null) ...[
+                    const SizedBox(height: 16),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFF4CE),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.cloud_off_outlined,
+                            size: 18,
+                            color: Color(0xFF7A4F01),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              _statusMessage!,
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: const Color(0xFF7A4F01),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 20),
+                  Container(
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
                       color: Colors.white,
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Profile', style: theme.textTheme.titleLarge),
+                        const SizedBox(height: 14),
+                        _DetailLine(label: 'Phone', value: profile?.phone ?? '-'),
+                        _DetailLine(
+                          label: 'Second Phone',
+                          value: profile?.secondPhone ?? '-',
+                        ),
+                        _DetailLine(label: 'Gender', value: profile?.gender ?? '-'),
+                        _DetailLine(
+                          label: 'Student Type',
+                          value: profile?.studentType ?? '-',
+                        ),
+                        _DetailLine(
+                          label: 'Fee Type',
+                          value: profile?.feeType ?? '-',
+                        ),
+                        _DetailLine(
+                          label: 'Blood Type',
+                          value: profile?.bloodType ?? '-',
+                        ),
+                        _DetailLine(
+                          label: 'Bus Assign',
+                          value: profile?.busAssign ?? '-',
+                        ),
+                        _DetailLine(
+                          label: 'Address',
+                          value: profile?.address ?? '-',
+                        ),
+                        if ((profile?.disabledAt ?? '').isNotEmpty)
+                          _DetailLine(
+                            label: 'Disabled At',
+                            value: profile?.disabledAt ?? '-',
+                          ),
+                        if ((profile?.disableReason ?? '').isNotEmpty)
+                          _DetailLine(
+                            label: 'Disable Reason',
+                            value: profile?.disableReason ?? '-',
+                          ),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 10),
-                  Text(
-                    widget.student.phone ?? '-',
-                    style: theme.textTheme.bodyLarge?.copyWith(
-                      color: Colors.white70,
+                  const SizedBox(height: 20),
+                  Container(
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Actions', style: theme.textTheme.titleLarge),
+                        const SizedBox(height: 14),
+                        Wrap(
+                          spacing: 12,
+                          runSpacing: 12,
+                          children: [
+                            if (_canRecordIncident)
+                              FilledButton.icon(
+                                onPressed: _usingOfflineData
+                                    ? null
+                                    : _openIncidentRecorder,
+                                icon: const Icon(Icons.gavel_outlined),
+                                label: const Text('Record Incident'),
+                              ),
+                            if (_canViewIncidentReport)
+                              OutlinedButton.icon(
+                                onPressed: _refreshingReport
+                                    ? null
+                                    : () => _loadData(reportOnly: true),
+                                icon: const Icon(Icons.description_outlined),
+                                label: Text(
+                                  _usingOfflineData
+                                      ? 'Retry Online'
+                                      : 'Refresh Incident Report',
+                                ),
+                              ),
+                          ],
+                        ),
+                        if (_error != null) ...[
+                          const SizedBox(height: 14),
+                          Text(
+                            _error!,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: const Color(0xFFB42318),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 16),
-                  Wrap(
-                    spacing: 12,
-                    runSpacing: 12,
-                    children: [
-                      _InfoChip(
-                          label: 'Roll', value: currentYear?.rollNumber ?? '—'),
-                      _InfoChip(
-                          label: 'Level', value: currentYear?.levelName ?? '—'),
-                      _InfoChip(
-                          label: 'Class', value: currentYear?.className ?? '—'),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
-            Container(
-              padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(24),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Actions', style: theme.textTheme.titleLarge),
-                  const SizedBox(height: 14),
-                  Wrap(
-                    spacing: 12,
-                    runSpacing: 12,
-                    children: [
-                      if (_canRecordIncident)
-                        FilledButton.icon(
-                          onPressed: _openIncidentRecorder,
-                          icon: const Icon(Icons.gavel_outlined),
-                          label: const Text('Record Incident'),
-                        ),
-                      if (_canViewIncidentReport)
-                        OutlinedButton.icon(
-                          onPressed: _loadingReport ? null : _loadReport,
-                          icon: const Icon(Icons.description_outlined),
-                          label: const Text('Refresh Incident Report'),
-                        ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            if (_canViewIncidentReport) ...[
-              const SizedBox(height: 20),
-              Container(
-                padding: const EdgeInsets.all(18),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Incident Report', style: theme.textTheme.titleLarge),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Recorded discipline incidents for this student.',
-                      style: theme.textTheme.bodyMedium,
-                    ),
-                    if (_error != null) ...[
-                      const SizedBox(height: 14),
-                      Text(
-                        _error!,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: const Color(0xFFB42318),
-                        ),
+                  if (_canViewIncidentReport) ...[
+                    const SizedBox(height: 20),
+                    Container(
+                      padding: const EdgeInsets.all(18),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(24),
                       ),
-                    ],
-                    const SizedBox(height: 14),
-                    if (_loadingReport)
-                      const Center(child: CircularProgressIndicator())
-                    else if (_report == null || _report!.incidents.isEmpty)
-                      Text(
-                        'No incidents recorded for this student.',
-                        style: theme.textTheme.bodyLarge,
-                      )
-                    else ...[
-                      Text(
-                        'Total incidents: ${_report!.incidents.length}',
-                        style: theme.textTheme.bodyLarge,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Incident Report', style: theme.textTheme.titleLarge),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Recorded discipline incidents for this student.',
+                            style: theme.textTheme.bodyMedium,
+                          ),
+                          const SizedBox(height: 14),
+                          if (_refreshingReport)
+                            const Center(child: CircularProgressIndicator())
+                          else if (_report == null || _report!.incidents.isEmpty)
+                            Text(
+                              'No incidents recorded for this student.',
+                              style: theme.textTheme.bodyLarge,
+                            )
+                          else ...[
+                            Text(
+                              'Total incidents: ${_report!.incidents.length}',
+                              style: theme.textTheme.bodyLarge,
+                            ),
+                            const SizedBox(height: 12),
+                            ..._report!.incidents.map(_buildIncidentCard),
+                          ],
+                        ],
                       ),
-                      const SizedBox(height: 12),
-                      ..._report!.incidents.map(_buildIncidentCard),
-                    ],
+                    ),
                   ],
-                ),
+                ],
               ),
-            ],
-          ],
-        ),
-      ),
+            ),
     );
   }
 
@@ -282,12 +476,12 @@ class _StudentDetailScreenState extends State<StudentDetailScreen> {
               ),
             ),
             const SizedBox(height: 8),
-            _DetailLine(label: 'Reported by', value: item.reportedBy ?? '—'),
+            _DetailLine(label: 'Reported by', value: item.reportedBy ?? '-'),
             _DetailLine(
               label: 'When',
               value: _formatDisplayDate(item.happenedAt ?? item.createdAt),
             ),
-            _DetailLine(label: 'Action', value: item.actionTaken ?? '—'),
+            _DetailLine(label: 'Action', value: item.actionTaken ?? '-'),
           ],
         ),
       ),
@@ -355,9 +549,26 @@ class _DetailLine extends StatelessWidget {
   }
 }
 
+StudentAcademicAssignment? _toAcademicAssignment(StudentCurrentYear? value) {
+  if (value == null) {
+    return null;
+  }
+
+  return StudentAcademicAssignment(
+    id: 0,
+    academicYearId: null,
+    levelId: null,
+    classId: value.classId,
+    rollNumber: value.rollNumber,
+    status: null,
+    levelName: value.levelName,
+    className: value.className,
+  );
+}
+
 String _formatDisplayDate(String? value) {
   if (value == null || value.isEmpty) {
-    return '—';
+    return '-';
   }
 
   final parsed = DateTime.tryParse(value);
@@ -371,3 +582,5 @@ String _formatDisplayDate(String? value) {
   final minute = parsed.minute.toString().padLeft(2, '0');
   return '${parsed.year}-$month-$day $hour:$minute';
 }
+
+String _cacheKey(int studentId) => 'student_detail_$studentId';

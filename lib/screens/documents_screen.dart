@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../models/auth_session.dart';
 import '../models/hr_models.dart';
 import '../services/laravel_api.dart';
+import '../services/offline_cache_store.dart';
 import 'document_form_screen.dart';
 
 class DocumentsScreen extends StatefulWidget {
@@ -25,10 +26,13 @@ class DocumentsScreen extends StatefulWidget {
 class _DocumentsScreenState extends State<DocumentsScreen> {
   final TextEditingController _searchController = TextEditingController();
   final TextEditingController _staffIdController = TextEditingController();
+  final OfflineCacheStore _cacheStore = const FileOfflineCacheStore();
 
   DocumentCategoryOptions? _options;
   DocumentPage? _page;
   bool _loading = true;
+  bool _usingOfflineData = false;
+  String? _statusMessage;
   String? _error;
 
   String _scopeFilter = '';
@@ -56,6 +60,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
     setState(() {
       _loading = true;
       _error = null;
+      _statusMessage = null;
     });
 
     try {
@@ -69,10 +74,18 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
 
       setState(() {
         _options = options;
+        _usingOfflineData = false;
       });
 
       await _loadPage();
     } on ApiException catch (error) {
+      final restored = await _restoreSnapshot(
+        'Offline mode: showing last synced document metadata.',
+      );
+      if (restored) {
+        return;
+      }
+
       if (!mounted) {
         return;
       }
@@ -82,6 +95,13 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
         _error = error.message;
       });
     } catch (_) {
+      final restored = await _restoreSnapshot(
+        'Offline mode: showing last synced document metadata.',
+      );
+      if (restored) {
+        return;
+      }
+
       if (!mounted) {
         return;
       }
@@ -97,6 +117,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
     setState(() {
       _loading = true;
       _error = null;
+      _statusMessage = null;
     });
 
     final staffId = int.tryParse(_staffIdController.text.trim());
@@ -119,8 +140,18 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
       setState(() {
         _page = result;
         _loading = false;
+        _usingOfflineData = false;
       });
+
+      await _writeSnapshot();
     } on ApiException catch (error) {
+      final restored = await _restoreSnapshot(
+        'Offline mode: showing last synced document metadata.',
+      );
+      if (restored) {
+        return;
+      }
+
       if (!mounted) {
         return;
       }
@@ -131,6 +162,13 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
         _error = error.message;
       });
     } catch (_) {
+      final restored = await _restoreSnapshot(
+        'Offline mode: showing last synced document metadata.',
+      );
+      if (restored) {
+        return;
+      }
+
       if (!mounted) {
         return;
       }
@@ -143,7 +181,56 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
     }
   }
 
+  Future<bool> _restoreSnapshot(String fallbackMessage) async {
+    final json = await _cacheStore.readCacheDocument(_documentsCacheKey);
+    if (json == null) {
+      return false;
+    }
+
+    final snapshot = DocumentsOfflineSnapshot.fromJson(json);
+    _searchController.text = snapshot.search;
+    _staffIdController.text = snapshot.staffId;
+
+    if (!mounted) {
+      return true;
+    }
+
+    setState(() {
+      _options = snapshot.options;
+      _page = snapshot.page;
+      _scopeFilter = snapshot.scopeFilter;
+      _categoryFilter = snapshot.categoryFilter;
+      _statusFilter = snapshot.statusFilter;
+      _loading = false;
+      _usingOfflineData = true;
+      _statusMessage = fallbackMessage;
+      _error = null;
+    });
+
+    return true;
+  }
+
+  Future<void> _writeSnapshot() async {
+    await _cacheStore.writeCacheDocument(
+      _documentsCacheKey,
+      DocumentsOfflineSnapshot(
+        options: _options,
+        page: _page,
+        search: _searchController.text.trim(),
+        staffId: _staffIdController.text.trim(),
+        scopeFilter: _scopeFilter,
+        categoryFilter: _categoryFilter,
+        statusFilter: _statusFilter,
+      ).toJson(),
+    );
+  }
+
   Future<void> _openForm({DocumentItem? document}) async {
+    if (_usingOfflineData) {
+      _showMessage('Document changes are only available while online.');
+      return;
+    }
+
     final options = _options;
     if (options == null) {
       return;
@@ -167,6 +254,11 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
   }
 
   Future<void> _confirmDelete(DocumentItem document) async {
+    if (_usingOfflineData) {
+      _showMessage('Document changes are only available while online.');
+      return;
+    }
+
     final shouldDelete = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -243,6 +335,11 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
   }
 
   Future<void> _openLink(String? url) async {
+    if (_usingOfflineData) {
+      _showMessage('Document files are only available while online.');
+      return;
+    }
+
     final resolved = _resolveLink(url);
     if (resolved == null) {
       return;
@@ -263,6 +360,16 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
       ..showSnackBar(
         const SnackBar(content: Text('Unable to open link.')),
       );
+  }
+
+  void _showMessage(String message) {
+    if (!mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 
   Widget _buildFilters() {
@@ -378,6 +485,13 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
             ),
           ],
         ),
+        if (_statusMessage != null) ...[
+          const SizedBox(height: 12),
+          _DocumentsOfflineBanner(
+            message: _statusMessage!,
+            onRetry: _usingOfflineData ? _loadMeta : null,
+          ),
+        ],
       ],
     );
   }
@@ -417,22 +531,30 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
             children: [
               if (document.viewUrl != null)
                 OutlinedButton(
-                  onPressed: () => _openLink(document.viewUrl),
+                  onPressed: _usingOfflineData
+                      ? null
+                      : () => _openLink(document.viewUrl),
                   child: const Text('View PDF'),
                 ),
               if (document.downloadUrl != null)
                 OutlinedButton(
-                  onPressed: () => _openLink(document.downloadUrl),
+                  onPressed: _usingOfflineData
+                      ? null
+                      : () => _openLink(document.downloadUrl),
                   child: const Text('Download'),
                 ),
               if (_canEdit)
                 OutlinedButton(
-                  onPressed: () => _openForm(document: document),
+                  onPressed: _usingOfflineData
+                      ? null
+                      : () => _openForm(document: document),
                   child: const Text('Edit'),
                 ),
               if (_canDelete)
                 OutlinedButton(
-                  onPressed: () => _confirmDelete(document),
+                  onPressed: _usingOfflineData
+                      ? null
+                      : () => _confirmDelete(document),
                   child: const Text('Delete'),
                 ),
             ],
@@ -452,7 +574,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
         actions: [
           if (_canCreate)
             IconButton(
-              onPressed: () => _openForm(),
+              onPressed: _usingOfflineData ? null : () => _openForm(),
               icon: const Icon(Icons.add),
               tooltip: 'Add Document',
             ),
@@ -516,6 +638,41 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
   }
 }
 
+class _DocumentsOfflineBanner extends StatelessWidget {
+  const _DocumentsOfflineBanner({
+    required this.message,
+    required this.onRetry,
+  });
+
+  final String message;
+  final Future<void> Function()? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFBEAE9),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.cloud_off_outlined, color: Color(0xFFB42318)),
+          const SizedBox(width: 10),
+          Expanded(child: Text(message)),
+          if (onRetry != null)
+            TextButton(
+              onPressed: () {
+                onRetry!();
+              },
+              child: const Text('Retry Online'),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 class _InfoChip extends StatelessWidget {
   const _InfoChip({required this.label});
 
@@ -533,3 +690,5 @@ class _InfoChip extends StatelessWidget {
     );
   }
 }
+
+const _documentsCacheKey = 'documents_snapshot';

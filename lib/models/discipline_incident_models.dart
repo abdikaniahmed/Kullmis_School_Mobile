@@ -36,6 +36,19 @@ class DisciplineIncidentPage {
       hasNextPage: json['next_page_url'] != null,
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'data': items.map((item) => item.toJson()).toList(),
+      'current_page': currentPage,
+      'last_page': lastPage,
+      'total': total,
+      'from': from,
+      'to': to,
+      'prev_page_url': hasPreviousPage ? 'cached' : null,
+      'next_page_url': hasNextPage ? 'cached' : null,
+    };
+  }
 }
 
 class DisciplineIncidentItem {
@@ -70,6 +83,19 @@ class DisciplineIncidentItem {
       createdAt: _toNullableString(json['created_at']),
       student: DisciplineIncidentStudentSummary.fromDynamic(json['student']),
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'student_id': studentId,
+      'reported_by': reportedBy,
+      'what_happened': whatHappened,
+      'happened_at': happenedAt,
+      'action_taken': actionTaken,
+      'created_at': createdAt,
+      'student': student?.toJson(),
+    };
   }
 }
 
@@ -124,6 +150,72 @@ class DisciplineIncidentStudentSummary {
           : null,
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'phone': phone,
+      'current_year': {
+        'level_id': levelId,
+        'school_class_id': classId,
+        'roll_number': rollNumber,
+        'level': levelName == null ? null : {'name': levelName},
+        'school_class': className == null ? null : {'name': className},
+      },
+    };
+  }
+}
+
+class DisciplineIncidentsOfflineSnapshot {
+  const DisciplineIncidentsOfflineSnapshot({
+    required this.levels,
+    required this.classes,
+    required this.page,
+    required this.selectedLevelId,
+    required this.selectedClassId,
+    required this.search,
+  });
+
+  final List<dynamic> levels;
+  final List<dynamic> classes;
+  final DisciplineIncidentPage? page;
+  final int? selectedLevelId;
+  final int? selectedClassId;
+  final String search;
+
+  factory DisciplineIncidentsOfflineSnapshot.fromJson(
+    Map<String, dynamic> json,
+  ) {
+    return DisciplineIncidentsOfflineSnapshot(
+      levels: (json['levels'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .toList(),
+      classes: (json['classes'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .toList(),
+      page: json['page'] is Map<String, dynamic>
+          ? DisciplineIncidentPage.fromJson(json['page'] as Map<String, dynamic>)
+          : null,
+      selectedLevelId: _toNullableInt(json['selected_level_id']),
+      selectedClassId: _toNullableInt(json['selected_class_id']),
+      search: '${json['search'] ?? ''}',
+    );
+  }
+
+  Map<String, dynamic> toJson({
+    required List<Map<String, dynamic>> levels,
+    required List<Map<String, dynamic>> classes,
+  }) {
+    return {
+      'levels': levels,
+      'classes': classes,
+      'page': page?.toJson(),
+      'selected_level_id': selectedLevelId,
+      'selected_class_id': selectedClassId,
+      'search': search,
+    };
+  }
 }
 
 class StudentIncidentReport {
@@ -148,6 +240,14 @@ class StudentIncidentReport {
           .map(DisciplineIncidentItem.fromJson)
           .toList(),
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'generated_at': generatedAt,
+      'student': student.toJson(),
+      'incidents': incidents.map((item) => item.toJson()).toList(),
+    };
   }
 }
 
@@ -174,6 +274,16 @@ class StudentIncidentReportStudent {
       levelName: _toNullableString(json['level_name']),
       className: _toNullableString(json['class_name']),
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'roll_number': rollNumber,
+      'level_name': levelName,
+      'class_name': className,
+    };
   }
 }
 
