@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../models/auth_session.dart';
 import '../models/dashboard_data.dart';
 import '../services/laravel_api.dart';
+import '../services/offline_sync_queue.dart';
 import '../widgets/summary_card.dart';
 import 'academic_years_screen.dart';
 import 'attendance_settings_screen.dart';
@@ -53,8 +56,11 @@ class HomeScreen extends StatefulWidget {
     required this.dashboard,
     required this.api,
     required this.onRefresh,
+    required this.onSyncNow,
     required this.onLogout,
     this.usingOfflineData = false,
+    this.isServerReachable = true,
+    this.isSyncing = false,
     this.statusMessage,
   });
 
@@ -62,8 +68,11 @@ class HomeScreen extends StatefulWidget {
   final DashboardData? dashboard;
   final LaravelApi api;
   final Future<void> Function() onRefresh;
+  final Future<void> Function() onSyncNow;
   final Future<void> Function() onLogout;
   final bool usingOfflineData;
+  final bool isServerReachable;
+  final bool isSyncing;
   final String? statusMessage;
 
   @override
@@ -71,10 +80,40 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  final OfflineSyncQueue _syncQueue = const OfflineSyncQueue();
   int _selectedIndex = 0;
   int? _expandedSidebarIndex;
   Widget? _windowContent;
   String? _windowTitle;
+  Timer? _pendingSyncTimer;
+  int _pendingSyncCount = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPendingSyncCount();
+    _pendingSyncTimer = Timer.periodic(
+      const Duration(seconds: 5),
+      (_) => _loadPendingSyncCount(),
+    );
+  }
+
+  @override
+  void dispose() {
+    _pendingSyncTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _loadPendingSyncCount() async {
+    final count = await _syncQueue.count();
+    if (!mounted || count == _pendingSyncCount) {
+      return;
+    }
+
+    setState(() {
+      _pendingSyncCount = count;
+    });
+  }
 
   bool get _canTakeMainAttendance => widget.session.hasAnyPermission(const [
         'attendance.view',
@@ -94,12 +133,6 @@ class _HomeScreenState extends State<HomeScreen> {
       ]);
 
   bool get _canViewStudents => widget.session.hasPermission('students.view');
-
-  bool get _canViewDisciplineIncidents =>
-      widget.session.hasAnyPermission(const [
-        'discipline_incidents.view',
-        'discipline_incidents.report.view',
-      ]);
 
   bool get _canEnterExamMarks => widget.session.hasAnyPermission(const [
         'marks.create',
@@ -1243,7 +1276,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildStatusBanner() {
     final message = widget.statusMessage;
-    if (message == null || message.isEmpty) {
+    final showReachabilityWarning = !widget.isServerReachable;
+    if ((message == null || message.isEmpty) &&
+        _pendingSyncCount == 0 &&
+        !showReachabilityWarning) {
       return const SizedBox.shrink();
     }
 
@@ -1262,14 +1298,55 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           const SizedBox(width: 10),
           Expanded(
-            child: Text(
-              message,
-              style: const TextStyle(
-                color: Color(0xFF7A4F01),
-                fontWeight: FontWeight.w500,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (showReachabilityWarning)
+                  const Text(
+                    'Server unreachable. Queued changes will sync when connection returns.',
+                    style: TextStyle(
+                      color: Color(0xFF7A4F01),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                if (showReachabilityWarning &&
+                    message != null &&
+                    message.isNotEmpty)
+                  const SizedBox(height: 6),
+                if (message != null && message.isNotEmpty)
+                  Text(
+                    message,
+                    style: const TextStyle(
+                      color: Color(0xFF7A4F01),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                if (_pendingSyncCount > 0 && message != null && message.isNotEmpty)
+                  const SizedBox(height: 6),
+                if (_pendingSyncCount > 0)
+                  Text(
+                    'Pending offline sync: $_pendingSyncCount',
+                    style: const TextStyle(
+                      color: Color(0xFF7A4F01),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+              ],
             ),
           ),
+          if (_pendingSyncCount > 0 || showReachabilityWarning)
+            TextButton.icon(
+              onPressed:
+                  widget.isSyncing ? null : () async => widget.onSyncNow(),
+              icon: widget.isSyncing
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.sync, size: 18),
+              label: Text(widget.isSyncing ? 'Syncing' : 'Sync Now'),
+            ),
         ],
       ),
     );
@@ -1372,6 +1449,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     userName: widget.session.name,
                     userEmail: widget.session.email,
                     onRefresh: widget.onRefresh,
+                    onSyncNow: widget.onSyncNow,
+                    isSyncing: widget.isSyncing,
                     onLogout: widget.onLogout,
                   ),
                   _buildStatusBanner(),
@@ -1406,6 +1485,18 @@ class _HomeScreenState extends State<HomeScreen> {
                 onPressed: () async => widget.onRefresh(),
                 icon: const Icon(Icons.refresh),
                 tooltip: 'Refresh',
+              ),
+              IconButton(
+                onPressed:
+                    widget.isSyncing ? null : () async => widget.onSyncNow(),
+                icon: widget.isSyncing
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.sync),
+                tooltip: 'Sync Now',
               ),
               IconButton(
                 onPressed: () async => widget.onLogout(),
@@ -1738,6 +1829,8 @@ class _TopBar extends StatelessWidget {
     required this.userName,
     required this.userEmail,
     required this.onRefresh,
+    required this.onSyncNow,
+    required this.isSyncing,
     required this.onLogout,
   });
 
@@ -1745,6 +1838,8 @@ class _TopBar extends StatelessWidget {
   final String userName;
   final String userEmail;
   final Future<void> Function() onRefresh;
+  final Future<void> Function() onSyncNow;
+  final bool isSyncing;
   final Future<void> Function() onLogout;
 
   @override
@@ -1780,6 +1875,17 @@ class _TopBar extends StatelessWidget {
             onPressed: () async => onRefresh(),
             icon: const Icon(Icons.refresh),
             tooltip: 'Refresh',
+          ),
+          TextButton.icon(
+            onPressed: isSyncing ? null : () async => onSyncNow(),
+            icon: isSyncing
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.sync),
+            label: Text(isSyncing ? 'Syncing' : 'Sync Now'),
           ),
           TextButton.icon(
             onPressed: () async => onLogout(),
