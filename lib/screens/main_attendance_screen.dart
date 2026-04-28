@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/main_attendance_models.dart';
 import '../services/laravel_api.dart';
 import '../services/offline_cache_store.dart';
+import '../services/offline_sync_queue.dart';
 
 class MainAttendanceScreen extends StatefulWidget {
   const MainAttendanceScreen({
@@ -31,6 +32,7 @@ class _MainAttendanceScreenState extends State<MainAttendanceScreen> {
   ];
 
   final OfflineCacheStore _cacheStore = const FileOfflineCacheStore();
+  final OfflineSyncQueue _syncQueue = const OfflineSyncQueue();
 
   ActiveAcademicYear? _academicYear;
   List<MainAttendanceLevel> _levels = const [];
@@ -343,6 +345,8 @@ class _MainAttendanceScreenState extends State<MainAttendanceScreen> {
         _statusMessage = null;
       });
 
+      await _syncQueue.remove(_queueKeyForAttendance());
+
       await _writeSnapshot();
       _showMessage('Attendance saved.');
       await _loadAttendance();
@@ -355,6 +359,20 @@ class _MainAttendanceScreenState extends State<MainAttendanceScreen> {
         pendingDraft: true,
         statusMessage:
             'Offline draft saved on this device. Sync again when the server is reachable.',
+      );
+      await _syncQueue.upsert(
+        OfflineSyncOperation(
+          key: _queueKeyForAttendance(),
+          type: 'main_attendance_save',
+          payload: {
+            'academic_year_id': academicYear.id,
+            'school_class_id': _selectedClassId!,
+            'date': _formatDate(_selectedDate),
+            'shift': _selectedShift,
+            'records': records.map((item) => item.toJson()).toList(),
+          },
+          createdAt: DateTime.now().toIso8601String(),
+        ),
       );
 
       _showMessage(error.message);
@@ -374,6 +392,20 @@ class _MainAttendanceScreenState extends State<MainAttendanceScreen> {
         pendingDraft: true,
         statusMessage:
             'Offline draft saved on this device. Sync again when the server is reachable.',
+      );
+      await _syncQueue.upsert(
+        OfflineSyncOperation(
+          key: _queueKeyForAttendance(),
+          type: 'main_attendance_save',
+          payload: {
+            'academic_year_id': academicYear.id,
+            'school_class_id': _selectedClassId!,
+            'date': _formatDate(_selectedDate),
+            'shift': _selectedShift,
+            'records': records.map((item) => item.toJson()).toList(),
+          },
+          createdAt: DateTime.now().toIso8601String(),
+        ),
       );
 
       _showMessage('Attendance saved locally as a draft.');
@@ -524,6 +556,10 @@ class _MainAttendanceScreenState extends State<MainAttendanceScreen> {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  String _queueKeyForAttendance() {
+    return '$mainAttendanceQueuePrefix${_selectedClassId ?? 0}:${_selectedShift}:${_formatDate(_selectedDate)}';
   }
 
   @override

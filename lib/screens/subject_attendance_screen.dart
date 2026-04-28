@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/subject_attendance_models.dart';
 import '../services/laravel_api.dart';
 import '../services/offline_cache_store.dart';
+import '../services/offline_sync_queue.dart';
 
 class SubjectAttendanceScreen extends StatefulWidget {
   const SubjectAttendanceScreen({
@@ -28,6 +29,7 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen> {
   ];
 
   final OfflineCacheStore _cacheStore = const FileOfflineCacheStore();
+  final OfflineSyncQueue _syncQueue = const OfflineSyncQueue();
 
   SubjectAttendanceFilters? _filters;
   SubjectAttendanceSessionData? _session;
@@ -283,6 +285,8 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen> {
         _statusMessage = null;
       });
 
+      await _syncQueue.remove(_queueKeyForAttendance());
+
       await _writeSnapshot();
       _showMessage('Subject attendance saved.');
       await _loadSession();
@@ -295,6 +299,20 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen> {
         pendingDraft: true,
         statusMessage:
             'Offline draft saved on this device. Sync again when the server is reachable.',
+      );
+      await _syncQueue.upsert(
+        OfflineSyncOperation(
+          key: _queueKeyForAttendance(),
+          type: 'subject_attendance_save',
+          payload: {
+            'academic_year_id': filters.academicYearId,
+            'school_class_id': _selectedClassId!,
+            'date': _formatDate(_selectedDate),
+            'period_number': _selectedPeriodNumber!,
+            'records': records.map((item) => item.toJson()).toList(),
+          },
+          createdAt: DateTime.now().toIso8601String(),
+        ),
       );
 
       _showMessage(error.message);
@@ -314,6 +332,20 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen> {
         pendingDraft: true,
         statusMessage:
             'Offline draft saved on this device. Sync again when the server is reachable.',
+      );
+      await _syncQueue.upsert(
+        OfflineSyncOperation(
+          key: _queueKeyForAttendance(),
+          type: 'subject_attendance_save',
+          payload: {
+            'academic_year_id': filters.academicYearId,
+            'school_class_id': _selectedClassId!,
+            'date': _formatDate(_selectedDate),
+            'period_number': _selectedPeriodNumber!,
+            'records': records.map((item) => item.toJson()).toList(),
+          },
+          createdAt: DateTime.now().toIso8601String(),
+        ),
       );
 
       _showMessage('Subject attendance saved locally as a draft.');
@@ -460,6 +492,10 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen> {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  String _queueKeyForAttendance() {
+    return '$subjectAttendanceQueuePrefix${_selectedClassId ?? 0}:${_selectedPeriodNumber ?? 0}:${_formatDate(_selectedDate)}';
   }
 
   @override

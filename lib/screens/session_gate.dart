@@ -5,6 +5,7 @@ import '../models/bootstrap_result.dart';
 import '../models/dashboard_data.dart';
 import '../services/laravel_api.dart';
 import '../services/offline_cache_store.dart';
+import '../services/offline_sync_queue.dart';
 import '../services/token_store.dart';
 import 'home_screen.dart';
 import 'login_screen.dart';
@@ -27,6 +28,7 @@ class SessionGate extends StatefulWidget {
 }
 
 class _SessionGateState extends State<SessionGate> {
+  final OfflineSyncCoordinator _syncCoordinator = const OfflineSyncCoordinator();
   late Future<BootstrapResult> _bootstrapFuture;
   AuthSession? _session;
   DashboardData? _dashboard;
@@ -59,6 +61,8 @@ class _SessionGateState extends State<SessionGate> {
       _dashboard = dashboard;
       _usingOfflineData = false;
       _statusMessage = null;
+
+      await _syncCoordinator.flush(api: widget.api, token: token);
 
       return BootstrapResult(session: session, dashboard: dashboard);
     } on ApiException catch (error) {
@@ -129,6 +133,10 @@ class _SessionGateState extends State<SessionGate> {
     if (dashboard != null) {
       await widget.offlineCacheStore.writeDashboard(dashboard);
     }
+    final syncResult = await _syncCoordinator.flush(
+      api: widget.api,
+      token: session.token,
+    );
 
     if (!mounted) {
       return;
@@ -138,7 +146,9 @@ class _SessionGateState extends State<SessionGate> {
       _session = session;
       _dashboard = dashboard;
       _usingOfflineData = false;
-      _statusMessage = null;
+      _statusMessage = syncResult.flushedCount > 0
+          ? 'Synced ${syncResult.flushedCount} pending offline changes.'
+          : null;
     });
   }
 
@@ -150,6 +160,10 @@ class _SessionGateState extends State<SessionGate> {
     }
 
     try {
+      final syncResult = await _syncCoordinator.flush(
+        api: widget.api,
+        token: session.token,
+      );
       final dashboard = await _tryLoadDashboard(session.token);
       if (dashboard != null) {
         await widget.offlineCacheStore.writeDashboard(dashboard);
@@ -162,7 +176,9 @@ class _SessionGateState extends State<SessionGate> {
       setState(() {
         _dashboard = dashboard;
         _usingOfflineData = false;
-        _statusMessage = null;
+        _statusMessage = syncResult.flushedCount > 0
+            ? 'Synced ${syncResult.flushedCount} pending offline changes.'
+            : null;
       });
     } on ApiException catch (_) {
       final cachedDashboard = await widget.offlineCacheStore.readDashboard();

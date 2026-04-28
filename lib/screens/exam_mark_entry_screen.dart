@@ -6,6 +6,7 @@ import '../models/main_attendance_models.dart';
 import '../models/student_list_models.dart';
 import '../services/laravel_api.dart';
 import '../services/offline_cache_store.dart';
+import '../services/offline_sync_queue.dart';
 
 class ExamMarkEntryScreen extends StatefulWidget {
   const ExamMarkEntryScreen({
@@ -25,6 +26,7 @@ class ExamMarkEntryScreen extends StatefulWidget {
 
 class _ExamMarkEntryScreenState extends State<ExamMarkEntryScreen> {
   final OfflineCacheStore _cacheStore = const FileOfflineCacheStore();
+  final OfflineSyncQueue _syncQueue = const OfflineSyncQueue();
 
   List<AcademicYearOption> _years = const [];
   List<MainAttendanceLevel> _levels = const [];
@@ -433,6 +435,8 @@ class _ExamMarkEntryScreenState extends State<ExamMarkEntryScreen> {
         _statusMessage = null;
       });
 
+      await _syncQueue.remove(_queueKeyForMarks());
+
       await _writeSnapshot();
       _showMessage('Exam marks saved.');
       await _loadRoster();
@@ -448,6 +452,17 @@ class _ExamMarkEntryScreenState extends State<ExamMarkEntryScreen> {
         pendingDraft: true,
         statusMessage:
             'Offline draft saved on this device. Sync marks again when the server is reachable.',
+      );
+      await _syncQueue.upsert(
+        OfflineSyncOperation(
+          key: _queueKeyForMarks(),
+          type: 'exam_marks_save',
+          payload: {
+            'class_id': classId,
+            'marks': drafts.map((item) => item.toJson()).toList(),
+          },
+          createdAt: DateTime.now().toIso8601String(),
+        ),
       );
 
       _showMessage(error.message);
@@ -467,6 +482,17 @@ class _ExamMarkEntryScreenState extends State<ExamMarkEntryScreen> {
         pendingDraft: true,
         statusMessage:
             'Offline draft saved on this device. Sync marks again when the server is reachable.',
+      );
+      await _syncQueue.upsert(
+        OfflineSyncOperation(
+          key: _queueKeyForMarks(),
+          type: 'exam_marks_save',
+          payload: {
+            'class_id': classId,
+            'marks': drafts.map((item) => item.toJson()).toList(),
+          },
+          createdAt: DateTime.now().toIso8601String(),
+        ),
       );
 
       _showMessage('Exam marks saved locally as a draft.');
@@ -616,6 +642,10 @@ class _ExamMarkEntryScreenState extends State<ExamMarkEntryScreen> {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  String _queueKeyForMarks() {
+    return '$examMarksQueuePrefix${_selectedClassId ?? 0}:${_selectedExamId ?? 0}:${_selectedSubjectId ?? 0}';
   }
 
   @override

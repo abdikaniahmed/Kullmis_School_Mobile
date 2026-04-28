@@ -5,6 +5,7 @@ import '../models/student_management_models.dart';
 import '../models/transport_models.dart';
 import '../services/laravel_api.dart';
 import '../services/offline_cache_store.dart';
+import '../services/offline_sync_queue.dart';
 
 class BusesScreen extends StatefulWidget {
   const BusesScreen({
@@ -24,6 +25,7 @@ class BusesScreen extends StatefulWidget {
 
 class _BusesScreenState extends State<BusesScreen> {
   final OfflineCacheStore _cacheStore = const FileOfflineCacheStore();
+  final OfflineSyncQueue _syncQueue = const OfflineSyncQueue();
 
   List<BusItem> _buses = const [];
   BusStudentReport? _report;
@@ -60,27 +62,10 @@ class _BusesScreenState extends State<BusesScreen> {
       ]);
 
       final buses = results[0] as List<BusItem>;
-      var report = results[1] as BusStudentReport;
-      var pendingAssignments = Map<int, List<int>>.from(_pendingAssignments);
+      final report = results[1] as BusStudentReport;
+      final pendingAssignments = await _loadPendingAssignments();
       var assignedStudentsByBus =
           Map<int, List<BusStudentItem>>.from(_assignedStudentsByBus);
-
-      if (pendingAssignments.isNotEmpty) {
-        pendingAssignments = await _flushPendingAssignments(pendingAssignments);
-        report = await widget.api.busStudentReport(token: widget.token);
-
-        final syncedBusIds = _pendingAssignments.keys
-            .where((busId) => !pendingAssignments.containsKey(busId))
-            .toList();
-        for (final busId in syncedBusIds) {
-          try {
-            assignedStudentsByBus[busId] = await widget.api.busStudents(
-              token: widget.token,
-              busId: busId,
-            );
-          } catch (_) {}
-        }
-      }
 
       if (!mounted) {
         return;
@@ -134,24 +119,24 @@ class _BusesScreenState extends State<BusesScreen> {
     }
   }
 
-  Future<Map<int, List<int>>> _flushPendingAssignments(
-    Map<int, List<int>> pendingAssignments,
-  ) async {
-    final remaining = <int, List<int>>{};
+  Future<Map<int, List<int>>> _loadPendingAssignments() async {
+    final queued = await _syncQueue.readQueue();
+    final pending = <int, List<int>>{};
 
-    for (final entry in pendingAssignments.entries) {
-      try {
-        await widget.api.assignBusStudents(
-          token: widget.token,
-          busId: entry.key,
-          studentIds: entry.value,
-        );
-      } catch (_) {
-        remaining[entry.key] = entry.value;
+    for (final item in queued.where(
+      (entry) => entry.key.startsWith(busAssignQueuePrefix),
+    )) {
+      final busId = _toInt(item.payload['bus_id']);
+      if (busId <= 0) {
+        continue;
       }
+      pending[busId] = (item.payload['student_ids'] as List<dynamic>? ?? const [])
+          .map(_toInt)
+          .where((value) => value > 0)
+          .toList();
     }
 
-    return remaining;
+    return pending;
   }
 
   Future<bool> _restoreSnapshot(String fallbackMessage) async {
@@ -656,6 +641,7 @@ class _BusesScreenState extends State<BusesScreen> {
         busId: bus.id,
         studentIds: sortedIds,
       );
+      await _syncQueue.remove('$busAssignQueuePrefix${bus.id}');
 
       _pendingAssignments = {
         ..._pendingAssignments,
@@ -714,6 +700,18 @@ class _BusesScreenState extends State<BusesScreen> {
       _statusMessage =
           'Offline mode: bus assignment changes are queued for sync.';
     });
+
+    await _syncQueue.upsert(
+      OfflineSyncOperation(
+        key: '$busAssignQueuePrefix${bus.id}',
+        type: 'bus_assign',
+        payload: {
+          'bus_id': bus.id,
+          'student_ids': selectedIds,
+        },
+        createdAt: DateTime.now().toIso8601String(),
+      ),
+    );
 
     await _writeSnapshot();
   }
@@ -1075,3 +1073,15 @@ class _BusEmpty extends StatelessWidget {
 }
 
 const _transportCacheKey = 'transport_snapshot';
+
+int _toInt(dynamic value) {
+  if (value is int) {
+    return value;
+  }
+
+  if (value is double) {
+    return value.round();
+  }
+
+  return int.tryParse('$value') ?? 0;
+}

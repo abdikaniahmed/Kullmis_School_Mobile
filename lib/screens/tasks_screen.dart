@@ -5,6 +5,7 @@ import '../models/hr_models.dart';
 import '../models/task_models.dart';
 import '../services/laravel_api.dart';
 import '../services/offline_cache_store.dart';
+import '../services/offline_sync_queue.dart';
 
 class TasksScreen extends StatefulWidget {
   const TasksScreen({
@@ -25,6 +26,7 @@ class TasksScreen extends StatefulWidget {
 class _TasksScreenState extends State<TasksScreen> {
   final TextEditingController _searchController = TextEditingController();
   final OfflineCacheStore _cacheStore = const FileOfflineCacheStore();
+  final OfflineSyncQueue _syncQueue = const OfflineSyncQueue();
 
   TaskIndexPayload? _payload;
   bool _loading = true;
@@ -77,13 +79,7 @@ class _TasksScreenState extends State<TasksScreen> {
         search: _searchController.text.trim(),
       );
 
-      var pendingCompletes = _pendingCompleteIds;
-      if (pendingCompletes.isNotEmpty) {
-        pendingCompletes = await _flushPendingCompletes(
-          payload.items,
-          pendingCompletes,
-        );
-      }
+      final pendingCompletes = await _loadPendingCompleteIds();
 
       if (!mounted) {
         return;
@@ -135,29 +131,14 @@ class _TasksScreenState extends State<TasksScreen> {
     }
   }
 
-  Future<List<int>> _flushPendingCompletes(
-    List<TaskItem> items,
-    List<int> pendingCompletes,
-  ) async {
-    final remaining = <int>[];
-
-    for (final taskId in pendingCompletes) {
-      final task = items.where((entry) => entry.id == taskId).firstOrNull;
-      if (task != null && task.status == 'completed') {
-        continue;
-      }
-
-      try {
-        await widget.api.completeTask(
-          token: widget.token,
-          taskId: taskId,
-        );
-      } catch (_) {
-        remaining.add(taskId);
-      }
-    }
-
-    return remaining;
+  Future<List<int>> _loadPendingCompleteIds() async {
+    final queued = await _syncQueue.readQueue();
+    return queued
+        .where((item) => item.key.startsWith(taskCompleteQueuePrefix))
+        .map((item) => _toInt(item.payload['task_id']))
+        .where((id) => id > 0)
+        .toList()
+      ..sort();
   }
 
   TaskIndexPayload _applyPendingCompletesToPayload(
@@ -307,6 +288,7 @@ class _TasksScreenState extends State<TasksScreen> {
         token: widget.token,
         taskId: task.id,
       );
+      await _syncQueue.remove('$taskCompleteQueuePrefix${task.id}');
 
       if (!mounted) {
         return;
@@ -356,6 +338,17 @@ class _TasksScreenState extends State<TasksScreen> {
       _statusMessage = 'Task completion saved locally and queued for sync.';
       _error = null;
     });
+
+    await _syncQueue.upsert(
+      OfflineSyncOperation(
+        key: '$taskCompleteQueuePrefix${task.id}',
+        type: 'task_complete',
+        payload: {
+          'task_id': task.id,
+        },
+        createdAt: DateTime.now().toIso8601String(),
+      ),
+    );
 
     await _writeSnapshot();
 
@@ -1233,4 +1226,16 @@ const _tasksCacheKey = 'tasks_snapshot';
 
 extension<T> on Iterable<T> {
   T? get firstOrNull => isEmpty ? null : first;
+}
+
+int _toInt(dynamic value) {
+  if (value is int) {
+    return value;
+  }
+
+  if (value is double) {
+    return value.round();
+  }
+
+  return int.tryParse('$value') ?? 0;
 }
