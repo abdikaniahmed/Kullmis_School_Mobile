@@ -254,18 +254,18 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen> {
       _saving = true;
     });
 
+    final records = session.students.map((student) {
+      final draft = _drafts[student.id] ??
+          const _AttendanceDraft(status: 'present', remarks: '');
+
+      return SubjectAttendanceRecordDraft(
+        studentId: student.studentId,
+        status: draft.status,
+        remarks: draft.remarks.trim(),
+      );
+    }).toList();
+
     try {
-      final records = session.students.map((student) {
-        final draft = _drafts[student.id] ??
-            const _AttendanceDraft(status: 'present', remarks: '');
-
-        return SubjectAttendanceRecordDraft(
-          studentId: student.studentId,
-          status: draft.status,
-          remarks: draft.remarks.trim(),
-        );
-      }).toList();
-
       await widget.api.saveSubjectAttendanceSession(
         token: widget.token,
         academicYearId: filters.academicYearId,

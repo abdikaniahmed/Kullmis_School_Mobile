@@ -314,18 +314,18 @@ class _MainAttendanceScreenState extends State<MainAttendanceScreen> {
       _saving = true;
     });
 
+    final records = session.students.map((student) {
+      final draft = _drafts[student.id] ??
+          const _AttendanceDraft(status: 'present', remarks: '');
+
+      return MainAttendanceRecordDraft(
+        studentId: student.studentId,
+        status: draft.status,
+        remarks: draft.remarks.trim(),
+      );
+    }).toList();
+
     try {
-      final records = session.students.map((student) {
-        final draft = _drafts[student.id] ??
-            const _AttendanceDraft(status: 'present', remarks: '');
-
-        return MainAttendanceRecordDraft(
-          studentId: student.studentId,
-          status: draft.status,
-          remarks: draft.remarks.trim(),
-        );
-      }).toList();
-
       await widget.api.saveMainAttendance(
         token: widget.token,
         academicYearId: academicYear.id,
