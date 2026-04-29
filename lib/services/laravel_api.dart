@@ -3249,6 +3249,53 @@ class LaravelApi {
     return SubjectAttendanceReportResponse.fromJson(payload);
   }
 
+  Future<AttendanceReportResponse> attendanceReport({
+    required String token,
+    required int academicYearId,
+    int? levelId,
+    int? schoolClassId,
+    required String shift,
+    String reportType = 'monthly',
+    String? month,
+    String? date,
+    int? recentDays,
+  }) async {
+    final queryParameters = <String, String>{
+      'academic_year_id': '$academicYearId',
+      'shift': shift,
+      'report_type': reportType,
+    };
+
+    if (levelId != null) {
+      queryParameters['level_id'] = '$levelId';
+    }
+    if (schoolClassId != null) {
+      queryParameters['school_class_id'] = '$schoolClassId';
+    }
+    if (month != null && month.isNotEmpty) {
+      queryParameters['month'] = month;
+    }
+    if (date != null && date.isNotEmpty) {
+      queryParameters['date'] = date;
+    }
+    if (recentDays != null) {
+      queryParameters['recent_days'] = '$recentDays';
+    }
+
+    final uri = Uri.parse('$baseUrl/school/attendance/monthly-report')
+        .replace(queryParameters: queryParameters);
+
+    final response = await _client.get(
+      uri,
+      headers: _headers(token: token),
+    );
+
+    final payload = _decode(response);
+    _throwIfNeeded(response, payload);
+
+    return AttendanceReportResponse.fromJson(payload);
+  }
+
   Future<SubjectTimetableResponse> subjectTimetable({
     required String token,
     int? academicYearId,

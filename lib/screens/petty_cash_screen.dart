@@ -849,9 +849,13 @@ class _PettyCashScreenState extends State<PettyCashScreen> {
       );
     }).toList();
 
-    final nextTransactions = {
+    final nextTransactions = <int, List<PettyCashTransactionItem>>{
       ..._transactionsByBudget,
-      budget.id: [transaction, ...(_transactionsByBudget[budget.id] ?? const [])],
+      budget.id: <PettyCashTransactionItem>[
+        transaction,
+        ...(_transactionsByBudget[budget.id] ??
+            const <PettyCashTransactionItem>[]),
+      ],
     };
 
     if (!mounted) {

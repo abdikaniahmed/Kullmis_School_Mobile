@@ -9,6 +9,7 @@ import '../services/laravel_api.dart';
 import '../services/offline_sync_queue.dart';
 import '../widgets/summary_card.dart';
 import 'academic_years_screen.dart';
+import 'attendance_report_screen.dart';
 import 'attendance_settings_screen.dart';
 import 'audit_logs_screen.dart';
 import 'backup_restore_screen.dart';
@@ -125,6 +126,9 @@ class _HomeScreenState extends State<HomeScreen> {
         'attendance.create',
         'attendance.edit',
       ]);
+
+  bool get _canViewAttendanceReports =>
+      widget.session.hasPermission('attendance.view');
 
   bool get _canTakeSubjectAttendance => widget.session.hasAnyPermission(const [
         'subject_attendance.view',
@@ -380,6 +384,21 @@ class _HomeScreenState extends State<HomeScreen> {
           icon: Icons.how_to_reg_outlined,
           onPressed: () => _openScreen(
             MainAttendanceScreen(
+              api: widget.api,
+              token: widget.session.token,
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (_canViewAttendanceReports) {
+      links.add(
+        _SidebarChildLink(
+          label: 'Attendance Report',
+          icon: Icons.list_alt_outlined,
+          onPressed: () => _openScreen(
+            AttendanceReportScreen(
               api: widget.api,
               token: widget.session.token,
             ),

@@ -160,6 +160,84 @@ class SubjectAttendanceReportItem {
   }
 }
 
+class AttendanceReportResponse {
+  const AttendanceReportResponse({
+    required this.reportType,
+    required this.viewMode,
+    required this.periodLabel,
+    required this.shift,
+    required this.schoolClassId,
+    required this.items,
+  });
+
+  final String reportType;
+  final String viewMode;
+  final String periodLabel;
+  final String? shift;
+  final int? schoolClassId;
+  final List<AttendanceReportRow> items;
+
+  bool get isDailyView => viewMode == 'daily';
+
+  factory AttendanceReportResponse.fromJson(Map<String, dynamic> json) {
+    return AttendanceReportResponse(
+      reportType: '${json['report_type'] ?? 'monthly'}'.trim(),
+      viewMode: '${json['view_mode'] ?? 'summary'}'.trim(),
+      periodLabel: '${json['period_label'] ?? ''}'.trim(),
+      shift: _toNullableString(json['shift']),
+      schoolClassId: _toNullableInt(json['class']),
+      items: (json['report'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(AttendanceReportRow.fromJson)
+          .toList(),
+    );
+  }
+}
+
+class AttendanceReportRow {
+  const AttendanceReportRow({
+    required this.studentName,
+    required this.className,
+    required this.rollNumber,
+    required this.date,
+    required this.status,
+    required this.remarks,
+    required this.present,
+    required this.absent,
+    required this.late,
+    required this.excused,
+    required this.totalDays,
+  });
+
+  final String studentName;
+  final String? className;
+  final String? rollNumber;
+  final String? date;
+  final String? status;
+  final String? remarks;
+  final int present;
+  final int absent;
+  final int late;
+  final int excused;
+  final int totalDays;
+
+  factory AttendanceReportRow.fromJson(Map<String, dynamic> json) {
+    return AttendanceReportRow(
+      studentName: '${json['student_name'] ?? ''}'.trim(),
+      className: _toNullableString(json['class_name']),
+      rollNumber: _toNullableString(json['roll_number']),
+      date: _toNullableString(json['date']),
+      status: _toNullableString(json['status']),
+      remarks: _toNullableString(json['remarks']),
+      present: _toInt(json['present']),
+      absent: _toInt(json['absent']),
+      late: _toInt(json['late']),
+      excused: _toInt(json['excused']),
+      totalDays: _toInt(json['total_days']),
+    );
+  }
+}
+
 class SubjectTimetableResponse {
   const SubjectTimetableResponse({
     required this.academicYearId,
