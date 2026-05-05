@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../l10n/app_language.dart';
 import '../models/auth_session.dart';
 import '../models/dashboard_data.dart';
 import '../services/laravel_api.dart';
@@ -207,16 +208,18 @@ class _HomeScreenState extends State<HomeScreen> {
 
   bool get _canUseMessaging => _isSchoolAdmin;
 
+  String _t(String key, [String fallback = '']) => context.tr(key, fallback);
+
   List<_ShellDestination> _destinations() {
     final destinations = <_ShellDestination>[
       _ShellDestination(
-        label: 'Dashboard',
+        label: _t('dashboard'),
         icon: Icons.dashboard_outlined,
         selectedIcon: Icons.dashboard,
         builder: _buildDashboardPage,
       ),
       _ShellDestination(
-        label: 'Student',
+        label: _t('student'),
         icon: Icons.groups_outlined,
         selectedIcon: Icons.groups,
         builder: _buildStudentsPage,
@@ -224,7 +227,7 @@ class _HomeScreenState extends State<HomeScreen> {
         sidebarChildren: _studentSidebarLinks(),
       ),
       _ShellDestination(
-        label: 'Transport',
+        label: _t('transport'),
         icon: Icons.directions_bus_outlined,
         selectedIcon: Icons.directions_bus,
         builder: _buildTransportPage,
@@ -232,7 +235,7 @@ class _HomeScreenState extends State<HomeScreen> {
         sidebarChildren: _transportSidebarLinks(),
       ),
       _ShellDestination(
-        label: 'Reports',
+        label: _t('reports'),
         icon: Icons.description_outlined,
         selectedIcon: Icons.description,
         builder: _buildReportsPage,
@@ -240,7 +243,7 @@ class _HomeScreenState extends State<HomeScreen> {
         sidebarChildren: _reportsSidebarLinks(),
       ),
       _ShellDestination(
-        label: 'Attendance',
+        label: _t('attendance'),
         icon: Icons.how_to_reg_outlined,
         selectedIcon: Icons.how_to_reg,
         builder: _buildAttendancePage,
@@ -248,7 +251,7 @@ class _HomeScreenState extends State<HomeScreen> {
         sidebarChildren: _attendanceSidebarLinks(),
       ),
       _ShellDestination(
-        label: 'Subject Attendance',
+        label: _t('subject_attendance'),
         icon: Icons.fact_check_outlined,
         selectedIcon: Icons.fact_check,
         builder: _buildSubjectAttendancePage,
@@ -256,7 +259,7 @@ class _HomeScreenState extends State<HomeScreen> {
         sidebarChildren: _subjectAttendanceSidebarLinks(),
       ),
       _ShellDestination(
-        label: 'Exams',
+        label: _t('exams'),
         icon: Icons.school_outlined,
         selectedIcon: Icons.school,
         builder: _buildExamsPage,
@@ -264,7 +267,7 @@ class _HomeScreenState extends State<HomeScreen> {
         sidebarChildren: _examsSidebarLinks(),
       ),
       _ShellDestination(
-        label: 'Finance',
+        label: _t('finance'),
         icon: Icons.request_quote_outlined,
         selectedIcon: Icons.request_quote,
         builder: _buildFeesPage,
@@ -272,7 +275,7 @@ class _HomeScreenState extends State<HomeScreen> {
         sidebarChildren: _financeSidebarLinks(),
       ),
       _ShellDestination(
-        label: 'HR',
+        label: _t('hr', 'HR'),
         icon: Icons.badge_outlined,
         selectedIcon: Icons.badge,
         builder: _buildHrPage,
@@ -280,7 +283,7 @@ class _HomeScreenState extends State<HomeScreen> {
         sidebarChildren: _hrSidebarLinks(),
       ),
       _ShellDestination(
-        label: 'Messaging',
+        label: _t('messaging'),
         icon: Icons.message_outlined,
         selectedIcon: Icons.message,
         builder: _buildMessagingPage,
@@ -288,7 +291,7 @@ class _HomeScreenState extends State<HomeScreen> {
         sidebarChildren: _messagingSidebarLinks(),
       ),
       _ShellDestination(
-        label: 'Academic',
+        label: _t('academic'),
         icon: Icons.auto_stories_outlined,
         selectedIcon: Icons.auto_stories,
         builder: _buildAcademicPage,
@@ -296,7 +299,7 @@ class _HomeScreenState extends State<HomeScreen> {
         sidebarChildren: _academicSidebarLinks(),
       ),
       _ShellDestination(
-        label: 'Settings',
+        label: _t('settings'),
         icon: Icons.settings_outlined,
         selectedIcon: Icons.settings,
         builder: _buildSettingsPage,
@@ -319,7 +322,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return <_SidebarChildLink>[
       if (_canViewStudents)
         _SidebarChildLink(
-          label: 'Admission',
+          label: _t('admission'),
           icon: Icons.groups_outlined,
           onPressed: () => _openScreen(
             StudentListScreen(
@@ -331,7 +334,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       if (_canViewStudents)
         _SidebarChildLink(
-          label: 'Disabled',
+          label: _t('disabled'),
           icon: Icons.block_outlined,
           onPressed: () => _openScreen(
             StudentsDisabledScreen(
@@ -343,7 +346,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       if (_canViewStudents)
         _SidebarChildLink(
-          label: 'Graduates',
+          label: _t('graduates'),
           icon: Icons.school_outlined,
           onPressed: () => _openScreen(
             StudentsGraduatesScreen(
@@ -355,7 +358,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       if (_canManageDisciplineIncidents)
         _SidebarChildLink(
-          label: 'Discipline Incidents',
+          label: _t('discipline_incidents'),
           icon: Icons.warning_amber_outlined,
           onPressed: () => _openScreen(
             DisciplineIncidentsScreen(
@@ -374,7 +377,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_canTakeMainAttendance) {
       links.add(
         _SidebarChildLink(
-          label: 'Mark Attendance',
+          label: _t('mark_attendance'),
           icon: Icons.how_to_reg_outlined,
           onPressed: () => _openScreen(
             MainAttendanceScreen(
@@ -389,7 +392,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (widget.session.hasPermission('attendance.edit')) {
       links.add(
         _SidebarChildLink(
-          label: 'Edit Attendance',
+          label: _t('edit_attendance'),
           icon: Icons.edit_note_outlined,
           onPressed: () => _openScreen(
             MainAttendanceScreen(
@@ -404,7 +407,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_canViewAttendanceReports) {
       links.add(
         _SidebarChildLink(
-          label: 'Attendance Report',
+          label: _t('attendance_report'),
           icon: Icons.list_alt_outlined,
           onPressed: () => _openScreen(
             AttendanceReportScreen(
@@ -426,7 +429,7 @@ class _HomeScreenState extends State<HomeScreen> {
         widget.session.hasPermission('students.report_list.view')) {
       links.add(
         _SidebarChildLink(
-          label: 'Student List Report',
+          label: _t('student_list_report'),
           icon: Icons.list_alt_outlined,
           onPressed: () => _openScreen(
             StudentListReportScreen(
@@ -441,7 +444,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_canViewBuses) {
       links.add(
         _SidebarChildLink(
-          label: 'Student Bus Report',
+          label: _t('student_bus_report'),
           icon: Icons.directions_bus_outlined,
           onPressed: () => _openScreen(
             BusesScreen(
@@ -457,7 +460,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (widget.session.hasPermission('discipline_incidents.report.view')) {
       links.addAll([
         _SidebarChildLink(
-          label: 'Student Incident Report',
+          label: _t('student_incident_report'),
           icon: Icons.report_outlined,
           onPressed: () => _openScreen(
             StudentIncidentReportScreen(
@@ -467,7 +470,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
         _SidebarChildLink(
-          label: 'Weekly Incident Report',
+          label: _t('weekly_incident_report'),
           icon: Icons.calendar_month_outlined,
           onPressed: () => _openScreen(
             WeeklyIncidentReportScreen(
@@ -488,7 +491,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_canTakeSubjectAttendance) {
       links.addAll([
         _SidebarChildLink(
-          label: 'Take Subject Attendance',
+          label: _t('take_subject_attendance'),
           icon: Icons.fact_check_outlined,
           onPressed: () => _openScreen(
             SubjectAttendanceScreen(
@@ -498,7 +501,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
         _SidebarChildLink(
-          label: 'Subject Attendance Report',
+          label: _t('subject_attendance_report'),
           icon: Icons.analytics_outlined,
           onPressed: () => _openScreen(
             SubjectAttendanceReportScreen(
@@ -513,7 +516,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_canViewSubjectTimetable) {
       links.add(
         _SidebarChildLink(
-          label: 'Subject Timetable',
+          label: _t('subject_timetable'),
           icon: Icons.schedule_outlined,
           onPressed: () => _openScreen(
             SubjectTimetableScreen(
@@ -538,7 +541,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_canEnterExamMarks) {
       links.addAll([
         _SidebarChildLink(
-          label: 'Enter Marks',
+          label: _t('enter_marks'),
           icon: Icons.edit_note_outlined,
           onPressed: () => _openScreen(
             ExamMarkEntryScreen(
@@ -549,7 +552,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
         _SidebarChildLink(
-          label: 'Enter Class Marks',
+          label: _t('enter_class_marks'),
           icon: Icons.check_circle_outline,
           onPressed: () => _openScreen(
             ExamMarkEntryScreen(
@@ -565,7 +568,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_canViewExamReports) {
       links.addAll([
         _SidebarChildLink(
-          label: 'Marks Report',
+          label: _t('marks_report'),
           icon: Icons.assessment_outlined,
           onPressed: () => _openScreen(
             ExamReportScreen(
@@ -575,7 +578,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
         _SidebarChildLink(
-          label: 'Class Report',
+          label: _t('class_report'),
           icon: Icons.leaderboard_outlined,
           onPressed: () => _openScreen(
             ClassReportScreen(
@@ -593,7 +596,7 @@ class _HomeScreenState extends State<HomeScreen> {
   List<_SidebarChildLink> _financeSidebarLinks() {
     final links = <_SidebarChildLink>[
       _SidebarChildLink(
-        label: 'Fee Invoices',
+        label: _t('fee_invoices'),
         icon: Icons.receipt_long_outlined,
         onPressed: () => _openScreen(
           FeeInvoicesScreen(
@@ -608,7 +611,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_canPayFees) {
       links.add(
         _SidebarChildLink(
-          label: 'Receive Payment',
+          label: _t('receive_payment'),
           icon: Icons.payments_outlined,
           onPressed: () => _openScreen(
             FeePaymentsScreen(
@@ -624,7 +627,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_canViewExamReports) {
       links.add(
         _SidebarChildLink(
-          label: 'Fee Reports',
+          label: _t('fee_reports'),
           icon: Icons.description_outlined,
           onPressed: () => _openScreen(
             ExamReportScreen(
@@ -639,7 +642,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (widget.session.hasPermission('expenses.view')) {
       links.add(
         _SidebarChildLink(
-          label: 'Expenses',
+          label: _t('expenses'),
           icon: Icons.receipt_outlined,
           onPressed: () => _openScreen(
             ExpensesScreen(
@@ -655,7 +658,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (widget.session.hasPermission('petty_cash.view')) {
       links.add(
         _SidebarChildLink(
-          label: 'Petty Cash',
+          label: _t('petty_cash'),
           icon: Icons.account_balance_wallet_outlined,
           onPressed: () => _openScreen(
             PettyCashScreen(
@@ -671,7 +674,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (widget.session.hasAnyPermission(const ['fees.pay', 'payments.edit'])) {
       links.add(
         _SidebarChildLink(
-          label: 'Payment Methods',
+          label: _t('payment_methods'),
           icon: Icons.credit_card_outlined,
           onPressed: () => _openScreen(
             PaymentMethodsScreen(
@@ -686,7 +689,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     links.add(
       _SidebarChildLink(
-        label: 'Fee Structures',
+        label: _t('fee_structures'),
         icon: Icons.layers_outlined,
         onPressed: () => _openScreen(
           FeeStructuresScreen(
@@ -707,7 +710,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return <_SidebarChildLink>[
       _SidebarChildLink(
-        label: 'Buses',
+        label: _t('buses'),
         icon: Icons.directions_bus_outlined,
         onPressed: () => _openScreen(
           BusesScreen(
@@ -727,7 +730,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_canViewStaff) {
       links.add(
         _SidebarChildLink(
-          label: 'Staffs',
+          label: _t('staff'),
           icon: Icons.badge_outlined,
           onPressed: () => _openScreen(
             StaffScreen(
@@ -743,7 +746,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (widget.session.hasPermission('tasks.view')) {
       links.add(
         _SidebarChildLink(
-          label: 'Tasks',
+          label: _t('tasks'),
           icon: Icons.checklist_outlined,
           onPressed: () => _openScreen(
             TasksScreen(
@@ -759,7 +762,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_canViewTeachers) {
       links.add(
         _SidebarChildLink(
-          label: 'Teachers',
+          label: _t('teachers'),
           icon: Icons.school_outlined,
           onPressed: () => _openScreen(
             TeachersScreen(
@@ -775,7 +778,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_canViewDocuments) {
       links.add(
         _SidebarChildLink(
-          label: 'Documents',
+          label: _t('documents'),
           icon: Icons.description_outlined,
           onPressed: () => _openScreen(
             DocumentsScreen(
@@ -791,7 +794,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_canViewUsers) {
       links.add(
         _SidebarChildLink(
-          label: 'Users',
+          label: _t('users'),
           icon: Icons.people_outline,
           onPressed: () => _openScreen(
             UsersScreen(
@@ -807,7 +810,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_canViewRoles) {
       links.add(
         _SidebarChildLink(
-          label: 'Roles',
+          label: _t('roles'),
           icon: Icons.settings_outlined,
           onPressed: () => _openScreen(
             RolesScreen(
@@ -823,7 +826,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_canViewAudits) {
       links.add(
         _SidebarChildLink(
-          label: 'Audit Logs',
+          label: _t('audit_logs'),
           icon: Icons.shield_outlined,
           onPressed: () => _openScreen(
             AuditLogsScreen(
@@ -845,7 +848,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_canViewAcademicYears) {
       links.add(
         _SidebarChildLink(
-          label: 'Academic Years',
+          label: _t('academic_years'),
           icon: Icons.calendar_month_outlined,
           onPressed: () => _openScreen(
             AcademicYearsScreen(
@@ -861,7 +864,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_canViewPromotions) {
       links.add(
         _SidebarChildLink(
-          label: 'Promotions',
+          label: _t('promotions'),
           icon: Icons.trending_up,
           onPressed: () => _openScreen(
             PromotionsScreen(
@@ -877,7 +880,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_canViewTerms) {
       links.add(
         _SidebarChildLink(
-          label: 'Terms',
+          label: _t('terms'),
           icon: Icons.calendar_today_outlined,
           onPressed: () => _openScreen(
             TermsScreen(
@@ -893,7 +896,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_canViewSubjects) {
       links.add(
         _SidebarChildLink(
-          label: 'Subjects',
+          label: _t('subjects'),
           icon: Icons.menu_book_outlined,
           onPressed: () => _openScreen(
             SubjectsScreen(
@@ -909,7 +912,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_canViewLevels) {
       links.add(
         _SidebarChildLink(
-          label: 'Levels',
+          label: _t('levels'),
           icon: Icons.layers_outlined,
           onPressed: () => _openScreen(
             LevelsScreen(
@@ -925,7 +928,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_canViewClasses) {
       links.add(
         _SidebarChildLink(
-          label: 'Classes',
+          label: _t('classes'),
           icon: Icons.folder_outlined,
           onPressed: () => _openScreen(
             ClassesScreen(
@@ -948,7 +951,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return <_SidebarChildLink>[
       _SidebarChildLink(
-        label: 'Inbox',
+        label: _t('inbox'),
         icon: Icons.message_outlined,
         onPressed: () => _openScreen(
           MessagingScreen(
@@ -959,7 +962,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
       _SidebarChildLink(
-        label: 'Twilio Credentials',
+        label: _t('twilio_credentials'),
         icon: Icons.settings_outlined,
         onPressed: () => _openScreen(
           MessagingScreen(
@@ -970,7 +973,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
       _SidebarChildLink(
-        label: 'Templates',
+        label: _t('templates'),
         icon: Icons.description_outlined,
         onPressed: () => _openScreen(
           MessagingScreen(
@@ -989,7 +992,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_isSchoolAdmin) {
       links.addAll([
         _SidebarChildLink(
-          label: 'General',
+          label: _t('general'),
           icon: Icons.settings_outlined,
           onPressed: () => _openScreen(
             GeneralSettingsScreen(
@@ -999,7 +1002,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
         _SidebarChildLink(
-          label: 'Setup Config',
+          label: _t('setup_config'),
           icon: Icons.tune_outlined,
           onPressed: () => _openScreen(
             SetupConfigScreen(
@@ -1009,7 +1012,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
         _SidebarChildLink(
-          label: 'Grade Setup',
+          label: _t('grade_setup'),
           icon: Icons.grading_outlined,
           onPressed: () => _openScreen(
             GradeSetupScreen(
@@ -1024,7 +1027,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_canEditAttendanceSettings) {
       links.add(
         _SidebarChildLink(
-          label: 'Attendance Settings',
+          label: _t('attendance_settings'),
           icon: Icons.how_to_reg_outlined,
           onPressed: () => _openScreen(
             AttendanceSettingsScreen(
@@ -1039,7 +1042,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_isSchoolAdmin) {
       links.add(
         _SidebarChildLink(
-          label: 'Backup & Restore',
+          label: _t('backup_restore', 'Backup & Restore'),
           icon: Icons.archive_outlined,
           onPressed: () => _openScreen(
             BackupRestoreScreen(
@@ -1053,7 +1056,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     links.add(
       _SidebarChildLink(
-        label: 'Sync Issues',
+        label: _t('sync_issues', 'Sync Issues'),
         icon: Icons.sync_problem_outlined,
         onPressed: () => _openScreen(
           const SyncIssuesScreen(),
@@ -1084,22 +1087,22 @@ class _HomeScreenState extends State<HomeScreen> {
     final theme = Theme.of(context);
     final cards = <SummaryCardData>[
       SummaryCardData(
-        label: 'Students',
+        label: _t('students'),
         value: widget.dashboard?.studentsLabel ?? '--',
         tone: const Color(0xFFE0F2FE),
       ),
       SummaryCardData(
-        label: 'Teachers',
+        label: _t('teachers'),
         value: widget.dashboard?.teachersLabel ?? '--',
         tone: const Color(0xFFFEF3C7),
       ),
       SummaryCardData(
-        label: 'Subjects',
+        label: _t('subjects'),
         value: widget.dashboard?.subjectsLabel ?? '--',
         tone: const Color(0xFFDCFCE7),
       ),
       SummaryCardData(
-        label: 'Attendance',
+        label: _t('attendance'),
         value: widget.dashboard?.attendanceLabel ?? '--',
         tone: const Color(0xFFFCE7F3),
       ),
@@ -1156,7 +1159,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
           const SizedBox(height: 20),
-          Text('Overview', style: theme.textTheme.titleLarge),
+          Text(_t('overview'), style: theme.textTheme.titleLarge),
           const SizedBox(height: 12),
           Wrap(
             spacing: 12,
@@ -1198,7 +1201,8 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Monthly revenue', style: theme.textTheme.titleLarge),
+                  Text(_t('monthly_revenue', 'Monthly revenue'),
+                      style: theme.textTheme.titleLarge),
                   const SizedBox(height: 12),
                   ...widget.dashboard!.monthTotals.map(
                     (entry) => Padding(
@@ -1222,7 +1226,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildStudentsPage() {
     return _buildOverviewPage(
-      title: 'Students',
+      title: _t('students'),
       description:
           'Open the student roster and drill into profiles from one place.',
       modules: _studentSidebarLinks().map((link) => link.label).toList(),
@@ -1231,16 +1235,22 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildAttendancePage() {
     return _buildOverviewPage(
-      title: 'Attendance',
-      description: 'Open the attendance tools that match the signed-in role.',
+      title: _t('attendance'),
+      description: _t(
+        'open_attendance_tools',
+        'Open the attendance tools that match the signed-in role.',
+      ),
       modules: _attendanceSidebarLinks().map((link) => link.label).toList(),
     );
   }
 
   Widget _buildSubjectAttendancePage() {
     return _buildOverviewPage(
-      title: 'Subject Attendance',
-      description: 'Take subject attendance and review subject reports.',
+      title: _t('subject_attendance'),
+      description: _t(
+        'take_subject_attendance_review_reports',
+        'Take subject attendance and review subject reports.',
+      ),
       modules:
           _subjectAttendanceSidebarLinks().map((link) => link.label).toList(),
     );
@@ -1248,56 +1258,70 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildReportsPage() {
     return _buildOverviewPage(
-      title: 'Reports',
-      description: 'Open exam reports and summaries.',
+      title: _t('reports'),
+      description: _t('open_exam_reports', 'Open exam reports and summaries.'),
       modules: _reportsSidebarLinks().map((link) => link.label).toList(),
     );
   }
 
   Widget _buildExamsPage() {
     return _buildOverviewPage(
-      title: 'Exams',
-      description: 'Manage exams, marks, and reports.',
+      title: _t('exams'),
+      description:
+          _t('manage_exams_marks_reports', 'Manage exams, marks, and reports.'),
       modules: _examsSidebarLinks().map((link) => link.label).toList(),
     );
   }
 
   Widget _buildHrPage() {
     return _buildOverviewPage(
-      title: 'HR',
-      description: 'Manage staff, teachers, documents, users, and roles.',
+      title: _t('hr', 'HR'),
+      description: _t(
+        'manage_hr_modules',
+        'Manage staff, teachers, documents, users, and roles.',
+      ),
       modules: _hrSidebarLinks().map((link) => link.label).toList(),
     );
   }
 
   Widget _buildAcademicPage() {
     return _buildOverviewPage(
-      title: 'Academic',
-      description: 'Academic tools and planning modules.',
+      title: _t('academic'),
+      description:
+          _t('academic_tools_planning', 'Academic tools and planning modules.'),
       modules: _academicSidebarLinks().map((link) => link.label).toList(),
-      emptyMessage:
-          'Academic tools will appear here once they are enabled for your role.',
+      emptyMessage: _t(
+        'academic_tools_enabled_for_role',
+        'Academic tools will appear here once they are enabled for your role.',
+      ),
     );
   }
 
   Widget _buildFeesPage() {
     return _buildOverviewPage(
-      title: 'Fees',
-      description: 'Manage school billing, invoices, and payment workflows.',
+      title: _t('fees'),
+      description: _t(
+        'manage_school_billing',
+        'Manage school billing, invoices, and payment workflows.',
+      ),
       modules: _financeSidebarLinks().map((link) => link.label).toList(),
     );
   }
 
   Widget _buildSettingsPage() {
     return _buildOverviewPage(
-      title: 'Settings',
-      description: 'Manage school configuration and attendance defaults.',
+      title: _t('settings'),
+      description: _t(
+        'manage_school_configuration',
+        'Manage school configuration and attendance defaults.',
+      ),
       modules: _settingsSidebarLinks().map((link) => link.label).toList(),
       footer: _buildPanel(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Signed in as', style: Theme.of(context).textTheme.titleLarge),
+            Text(_t('signed_in_as', 'Signed in as'),
+                style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 8),
             Text(widget.session.name,
                 style: Theme.of(context).textTheme.bodyLarge),
@@ -1318,8 +1342,11 @@ class _HomeScreenState extends State<HomeScreen> {
     Widget? footer,
   }) {
     final theme = Theme.of(context);
-    final activeMessage =
-        emptyMessage ?? 'Use the sidebar sub-links to open a module.';
+    final activeMessage = emptyMessage ??
+        _t(
+          'use_sidebar_sublinks',
+          'Use the sidebar sub-links to open a module.',
+        );
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
@@ -1339,10 +1366,11 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Overview', style: theme.textTheme.titleLarge),
+              Text(_t('overview'), style: theme.textTheme.titleLarge),
               const SizedBox(height: 8),
               Text(
-                'Modules available: ${modules.length}',
+                _t('modules_available', 'Modules available: :count')
+                    .replaceAll(':count', '${modules.length}'),
                 style: theme.textTheme.bodyMedium,
               ),
               const SizedBox(height: 12),
@@ -1368,7 +1396,10 @@ class _HomeScreenState extends State<HomeScreen> {
               if (modules.isNotEmpty) ...[
                 const SizedBox(height: 8),
                 Text(
-                  'Open a module using the sidebar sub-links.',
+                  _t(
+                    'open_module_sidebar_sublinks',
+                    'Open a module using the sidebar sub-links.',
+                  ),
                   style: theme.textTheme.bodyMedium,
                 ),
               ],
@@ -1396,11 +1427,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildMessagingPage() {
     return _buildOverviewPage(
-      title: 'Messaging',
-      description: 'Open messaging inbox, templates, and channel settings.',
+      title: _t('messaging'),
+      description: _t(
+        'open_messaging_tools',
+        'Open messaging inbox, templates, and channel settings.',
+      ),
       modules: _messagingSidebarLinks().map((link) => link.label).toList(),
-      emptyMessage:
-          'Messaging tools will appear here once they are enabled for your role.',
+      emptyMessage: _t(
+        'messaging_tools_enabled_for_role',
+        'Messaging tools will appear here once they are enabled for your role.',
+      ),
     );
   }
 
@@ -1433,9 +1469,12 @@ class _HomeScreenState extends State<HomeScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 if (showReachabilityWarning)
-                  const Text(
-                    'Server unreachable. Queued changes will sync when connection returns.',
-                    style: TextStyle(
+                  Text(
+                    _t(
+                      'server_unreachable_queued_changes',
+                      'Server unreachable. Queued changes will sync when connection returns.',
+                    ),
+                    style: const TextStyle(
                       color: Color(0xFF7A4F01),
                       fontWeight: FontWeight.w600,
                     ),
@@ -1456,7 +1495,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   const SizedBox(height: 6),
                 if (_pendingSyncCount > 0)
                   Text(
-                    'Pending offline sync: $_pendingSyncCount',
+                    '${_t('pending_offline_sync', 'Pending offline sync')}: $_pendingSyncCount',
                     style: const TextStyle(
                       color: Color(0xFF7A4F01),
                       fontWeight: FontWeight.w600,
@@ -1465,7 +1504,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 if (_syncIssueCount > 0) ...[
                   const SizedBox(height: 6),
                   Text(
-                    'Sync conflicts need review: $_syncIssueCount',
+                    '${_t('sync_conflicts_need_review', 'Sync conflicts need review')}: $_syncIssueCount',
                     style: const TextStyle(
                       color: Color(0xFF7A4F01),
                       fontWeight: FontWeight.w700,
@@ -1479,7 +1518,7 @@ class _HomeScreenState extends State<HomeScreen> {
             TextButton.icon(
               onPressed: () async => _openScreen(const SyncIssuesScreen()),
               icon: const Icon(Icons.visibility_outlined, size: 18),
-              label: const Text('Review'),
+              label: Text(_t('review')),
             ),
           if (_pendingSyncCount > 0 || showReachabilityWarning)
             TextButton.icon(
@@ -1492,7 +1531,11 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Icon(Icons.sync, size: 18),
-              label: Text(widget.isSyncing ? 'Syncing' : 'Sync Now'),
+              label: Text(
+                widget.isSyncing
+                    ? _t('syncing', 'Syncing')
+                    : _t('sync_now', 'Sync Now'),
+              ),
             ),
         ],
       ),
@@ -1501,11 +1544,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildTransportPage() {
     return _buildOverviewPage(
-      title: 'Transport',
-      description:
-          'Manage buses, assign students, and track transport coverage across the school.',
+      title: _t('transport'),
+      description: _t(
+        'manage_transport_coverage',
+        'Manage buses, assign students, and track transport coverage across the school.',
+      ),
       modules: _transportSidebarLinks().map((link) => link.label).toList(),
-      emptyMessage: 'No transport modules are available for this account yet.',
+      emptyMessage: _t(
+        'no_transport_modules_available',
+        'No transport modules are available for this account yet.',
+      ),
     );
   }
 
@@ -1529,7 +1577,8 @@ class _HomeScreenState extends State<HomeScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              '${destination.label} Modules',
+              _t('modules_title', ':name Modules')
+                  .replaceAll(':name', destination.label),
               style: theme.textTheme.titleMedium,
             ),
             const SizedBox(height: 10),
@@ -1569,7 +1618,7 @@ class _HomeScreenState extends State<HomeScreen> {
         body: Row(
           children: [
             _Sidebar(
-              schoolName: widget.session.schoolName ?? 'Kullmis School',
+              schoolName: widget.session.schoolName ?? _t('kullmis_school'),
               destinations: destinations,
               selectedIndex: selectedIndex,
               expandedIndex: _expandedSidebarIndex,
@@ -1624,14 +1673,20 @@ class _HomeScreenState extends State<HomeScreen> {
             backgroundColor: Colors.transparent,
             title: Text(
               useRail
-                  ? widget.session.schoolName ?? 'Kullmis School Mobile'
+                  ? widget.session.schoolName ??
+                      _t('kullmis_school_mobile', 'Kullmis School Mobile')
                   : selectedDestination.label,
             ),
             actions: [
               IconButton(
+                onPressed: () async => context.language.toggleLocale(),
+                icon: const Icon(Icons.language),
+                tooltip: context.tr('language'),
+              ),
+              IconButton(
                 onPressed: () async => widget.onRefresh(),
                 icon: const Icon(Icons.refresh),
-                tooltip: 'Refresh',
+                tooltip: context.tr('refresh'),
               ),
               IconButton(
                 onPressed:
@@ -1643,12 +1698,12 @@ class _HomeScreenState extends State<HomeScreen> {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Icon(Icons.sync),
-                tooltip: 'Sync Now',
+                tooltip: context.tr('sync_now', 'Sync Now'),
               ),
               IconButton(
                 onPressed: () async => widget.onLogout(),
                 icon: const Icon(Icons.logout),
-                tooltip: 'Logout',
+                tooltip: context.tr('logout'),
               ),
             ],
           ),
@@ -1681,7 +1736,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         SizedBox(
                           width: 88,
                           child: Text(
-                            widget.session.schoolName ?? 'Kullmis School',
+                            widget.session.schoolName ?? _t('kullmis_school'),
                             textAlign: TextAlign.center,
                             style: theme.textTheme.bodyMedium,
                           ),
@@ -1848,7 +1903,7 @@ class _Sidebar extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
               child: Text(
-                'Kullmis School System',
+                context.tr('kullmis_school_system', 'Kullmis School System'),
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurface.withOpacity(0.7),
                 ),
@@ -2031,9 +2086,14 @@ class _TopBar extends StatelessWidget {
           ),
           const SizedBox(width: 16),
           IconButton(
+            onPressed: () async => context.language.toggleLocale(),
+            icon: const Icon(Icons.language),
+            tooltip: context.tr('language'),
+          ),
+          IconButton(
             onPressed: () async => onRefresh(),
             icon: const Icon(Icons.refresh),
-            tooltip: 'Refresh',
+            tooltip: context.tr('refresh'),
           ),
           TextButton.icon(
             onPressed: isSyncing ? null : () async => onSyncNow(),
@@ -2044,12 +2104,16 @@ class _TopBar extends StatelessWidget {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.sync),
-            label: Text(isSyncing ? 'Syncing' : 'Sync Now'),
+            label: Text(
+              isSyncing
+                  ? context.tr('syncing', 'Syncing')
+                  : context.tr('sync_now', 'Sync Now'),
+            ),
           ),
           TextButton.icon(
             onPressed: () async => onLogout(),
             icon: const Icon(Icons.logout),
-            label: const Text('Logout'),
+            label: Text(context.tr('logout')),
           ),
         ],
       ),

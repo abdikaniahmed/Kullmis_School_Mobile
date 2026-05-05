@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/app_language.dart';
 import '../services/laravel_api.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -62,7 +63,8 @@ class _LoginScreenState extends State<LoginScreen> {
     } catch (_) {
       setState(() {
         _error =
-            'Unable to connect to the API. Check the base URL and network access.';
+            context.tr('unable_connect_api',
+                'Unable to connect to the API. Check the base URL and network access.');
       });
     } finally {
       if (mounted) {
@@ -76,6 +78,7 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final language = context.language;
 
     return Scaffold(
       body: Container(
@@ -102,13 +105,30 @@ class _LoginScreenState extends State<LoginScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          Align(
+                            alignment: AlignmentDirectional.centerEnd,
+                            child: OutlinedButton.icon(
+                              onPressed: () async =>
+                                  context.language.toggleLocale(),
+                              icon: const Icon(Icons.language, size: 18),
+                              label: Text(
+                                language.isArabic
+                                    ? language.t('english')
+                                    : 'العربية',
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
                           Text(
-                            'Kullmis School',
+                            context.tr('kullmis_school'),
                             style: theme.textTheme.headlineLarge,
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'Sign in with your Laravel account to open the mobile dashboard.',
+                            context.tr(
+                              'mobile_login_subtitle',
+                              'Sign in with your Laravel account to open the mobile dashboard.',
+                            ),
                             style: theme.textTheme.bodyLarge,
                           ),
                           const SizedBox(height: 24),
@@ -132,12 +152,11 @@ class _LoginScreenState extends State<LoginScreen> {
                             controller: _emailController,
                             keyboardType: TextInputType.emailAddress,
                             decoration: const InputDecoration(
-                              labelText: 'Email',
                               border: OutlineInputBorder(),
-                            ),
+                            ).copyWith(labelText: context.tr('email')),
                             validator: (value) {
                               if (value == null || value.trim().isEmpty) {
-                                return 'Email is required.';
+                                return context.tr('email_required');
                               }
 
                               return null;
@@ -148,12 +167,11 @@ class _LoginScreenState extends State<LoginScreen> {
                             controller: _passwordController,
                             obscureText: true,
                             decoration: const InputDecoration(
-                              labelText: 'Password',
                               border: OutlineInputBorder(),
-                            ),
+                            ).copyWith(labelText: context.tr('password')),
                             validator: (value) {
                               if (value == null || value.isEmpty) {
-                                return 'Password is required.';
+                                return context.tr('password_required');
                               }
 
                               return null;
@@ -176,13 +194,13 @@ class _LoginScreenState extends State<LoginScreen> {
                                       child: CircularProgressIndicator(
                                         strokeWidth: 2,
                                       ),
-                                    )
-                                  : const Text('Sign in'),
+                                  )
+                                  : Text(context.tr('login')),
                             ),
                           ),
                           const SizedBox(height: 18),
                           Text(
-                            'API base URL',
+                            context.tr('api_base_url', 'API base URL'),
                             style: theme.textTheme.titleLarge,
                           ),
                           const SizedBox(height: 8),
