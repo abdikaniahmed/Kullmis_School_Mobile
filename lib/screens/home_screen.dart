@@ -1644,6 +1644,13 @@ class _HomeScreenState extends State<HomeScreen> {
                     title: _windowTitle ?? selectedDestination.label,
                     userName: widget.session.name,
                     userEmail: widget.session.email,
+                    onProfile: () => _openScreen(
+                      GeneralSettingsScreen(
+                        api: widget.api,
+                        token: widget.session.token,
+                      ),
+                      title: _t('profile'),
+                    ),
                     onRefresh: widget.onRefresh,
                     onSyncNow: widget.onSyncNow,
                     isSyncing: widget.isSyncing,
@@ -2042,6 +2049,7 @@ class _TopBar extends StatelessWidget {
     required this.title,
     required this.userName,
     required this.userEmail,
+    required this.onProfile,
     required this.onRefresh,
     required this.onSyncNow,
     required this.isSyncing,
@@ -2051,6 +2059,7 @@ class _TopBar extends StatelessWidget {
   final String title;
   final String userName;
   final String userEmail;
+  final Future<void> Function() onProfile;
   final Future<void> Function() onRefresh;
   final Future<void> Function() onSyncNow;
   final bool isSyncing;
@@ -2076,15 +2085,6 @@ class _TopBar extends StatelessWidget {
           const SizedBox(width: 12),
           Text(title, style: theme.textTheme.titleLarge),
           const Spacer(),
-          Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(userName, style: theme.textTheme.bodyLarge),
-              Text(userEmail, style: theme.textTheme.bodyMedium),
-            ],
-          ),
-          const SizedBox(width: 16),
           IconButton(
             onPressed: () async => context.language.toggleLocale(),
             icon: const Icon(Icons.language),
@@ -2110,16 +2110,167 @@ class _TopBar extends StatelessWidget {
                   : context.tr('sync_now', 'Sync Now'),
             ),
           ),
-          TextButton.icon(
-            onPressed: () async => onLogout(),
-            icon: const Icon(Icons.logout),
-            label: Text(context.tr('logout')),
+          const SizedBox(width: 8),
+          _ProfileMenu(
+            userName: userName,
+            userEmail: userEmail,
+            onProfile: onProfile,
+            onLogout: onLogout,
           ),
         ],
       ),
     );
   }
 }
+
+class _ProfileMenu extends StatelessWidget {
+  const _ProfileMenu({
+    required this.userName,
+    required this.userEmail,
+    required this.onProfile,
+    required this.onLogout,
+  });
+
+  final String userName;
+  final String userEmail;
+  final Future<void> Function() onProfile;
+  final Future<void> Function() onLogout;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final initials = _initials(userName);
+
+    return PopupMenuButton<_ProfileMenuAction>(
+      tooltip: context.tr('profile'),
+      offset: const Offset(0, 14),
+      position: PopupMenuPosition.under,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      constraints: const BoxConstraints(minWidth: 256),
+      onSelected: (action) async {
+        switch (action) {
+          case _ProfileMenuAction.profile:
+            await onProfile();
+            break;
+          case _ProfileMenuAction.logout:
+            await onLogout();
+            break;
+        }
+      },
+      itemBuilder: (context) => [
+        PopupMenuItem<_ProfileMenuAction>(
+          enabled: false,
+          padding: EdgeInsets.zero,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  userName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    color: theme.colorScheme.onSurface,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  userEmail,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurface.withOpacity(0.65),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const PopupMenuDivider(height: 1),
+        PopupMenuItem<_ProfileMenuAction>(
+          value: _ProfileMenuAction.profile,
+          height: 46,
+          child: Row(
+            children: [
+              Icon(
+                Icons.account_circle_outlined,
+                size: 20,
+                color: theme.colorScheme.onSurface.withOpacity(0.75),
+              ),
+              const SizedBox(width: 12),
+              Text(context.tr('profile')),
+            ],
+          ),
+        ),
+        PopupMenuItem<_ProfileMenuAction>(
+          value: _ProfileMenuAction.logout,
+          height: 46,
+          child: Row(
+            children: [
+              Icon(Icons.logout, size: 20, color: theme.colorScheme.error),
+              const SizedBox(width: 12),
+              Text(
+                context.tr('logout'),
+                style: TextStyle(color: theme.colorScheme.error),
+              ),
+            ],
+          ),
+        ),
+      ],
+      child: Container(
+        height: 44,
+        padding: const EdgeInsets.fromLTRB(6, 4, 10, 4),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface,
+          border: Border.all(color: Colors.black.withOpacity(0.08)),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircleAvatar(
+              radius: 16,
+              backgroundColor: theme.colorScheme.primary.withOpacity(0.12),
+              foregroundColor: theme.colorScheme.primary,
+              child: Text(
+                initials,
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: theme.colorScheme.primary,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Icon(
+              Icons.keyboard_arrow_down,
+              size: 20,
+              color: theme.colorScheme.onSurface.withOpacity(0.65),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _initials(String value) {
+    final words = value
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((word) => word.isNotEmpty)
+        .toList();
+    if (words.isEmpty) {
+      return 'U';
+    }
+    if (words.length == 1) {
+      return words.first[0].toUpperCase();
+    }
+    return '${words.first[0]}${words.last[0]}'.toUpperCase();
+  }
+}
+
+enum _ProfileMenuAction { profile, logout }
 
 class _ShellDestination {
   const _ShellDestination({
