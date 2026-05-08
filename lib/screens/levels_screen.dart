@@ -208,6 +208,7 @@ class _LevelsScreenState extends State<LevelsScreen> {
     }
 
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: page.items.map(_buildCard).toList(),
     );
   }

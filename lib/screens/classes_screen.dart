@@ -208,6 +208,7 @@ class _ClassesScreenState extends State<ClassesScreen> {
     }
 
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: page.items.map(_buildCard).toList(),
     );
   }
