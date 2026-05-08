@@ -1148,9 +1148,20 @@ class _HomeScreenState extends State<HomeScreen> {
                   children: widget.session.roles
                       .map(
                         (role) => Chip(
-                          label: Text(role),
-                          backgroundColor: Colors.white.withOpacity(0.18),
-                          labelStyle: const TextStyle(color: Colors.white),
+                          label: Text(
+                            role.replaceAll('_', ' '),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          backgroundColor: Colors.white.withOpacity(0.14),
+                          side: BorderSide(
+                            color: Colors.white.withOpacity(0.45),
+                          ),
+                          labelStyle: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                          ),
+                          visualDensity: VisualDensity.compact,
                         ),
                       )
                       .toList(),
@@ -1605,6 +1616,87 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  List<int> _mobilePrimaryIndexes(List<_ShellDestination> destinations) {
+    final preferredIcons = <IconData>[
+      Icons.dashboard,
+      Icons.groups,
+      Icons.how_to_reg,
+      Icons.request_quote,
+    ];
+    final indexes = <int>[];
+
+    for (final icon in preferredIcons) {
+      final index = destinations.indexWhere(
+        (destination) => destination.selectedIcon == icon,
+      );
+      if (index != -1 && !indexes.contains(index)) {
+        indexes.add(index);
+      }
+    }
+
+    for (var index = 0;
+        index < destinations.length && indexes.length < 4;
+        index++) {
+      if (!indexes.contains(index)) {
+        indexes.add(index);
+      }
+    }
+
+    return indexes;
+  }
+
+  Future<void> _showMobileMoreSheet(
+    BuildContext context,
+    List<_ShellDestination> destinations,
+    List<int> primaryIndexes,
+    int selectedIndex,
+  ) async {
+    final theme = Theme.of(context);
+    final moreIndexes = <int>[
+      for (var index = 0; index < destinations.length; index++)
+        if (!primaryIndexes.contains(index)) index,
+    ];
+
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) {
+        return SafeArea(
+          child: ListView.separated(
+            shrinkWrap: true,
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+            itemCount: moreIndexes.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 4),
+            itemBuilder: (context, itemIndex) {
+              final destinationIndex = moreIndexes[itemIndex];
+              final destination = destinations[destinationIndex];
+              final selected = destinationIndex == selectedIndex;
+
+              return ListTile(
+                selected: selected,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                leading: Icon(
+                  selected ? destination.selectedIcon : destination.icon,
+                  color: selected ? theme.colorScheme.primary : null,
+                ),
+                title: Text(destination.label),
+                trailing: selected ? const Icon(Icons.check) : null,
+                onTap: () {
+                  Navigator.of(context).pop();
+                  setState(() {
+                    _selectedIndex = destinationIndex;
+                  });
+                },
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -1674,6 +1766,13 @@ class _HomeScreenState extends State<HomeScreen> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final useRail = constraints.maxWidth >= 900;
+        final mobilePrimaryIndexes = _mobilePrimaryIndexes(destinations);
+        final hasMoreDestinations =
+            !useRail && destinations.length > mobilePrimaryIndexes.length;
+        final mobileSelectedIndex =
+            mobilePrimaryIndexes.contains(selectedIndex)
+                ? mobilePrimaryIndexes.indexOf(selectedIndex)
+                : mobilePrimaryIndexes.length;
 
         return Scaffold(
           appBar: AppBar(
@@ -1780,21 +1879,46 @@ class _HomeScreenState extends State<HomeScreen> {
           bottomNavigationBar: useRail
               ? null
               : NavigationBar(
-                  selectedIndex: selectedIndex,
+                  selectedIndex: hasMoreDestinations
+                      ? mobileSelectedIndex
+                      : selectedIndex,
                   onDestinationSelected: (index) {
+                    if (hasMoreDestinations &&
+                        index == mobilePrimaryIndexes.length) {
+                      _showMobileMoreSheet(
+                        context,
+                        destinations,
+                        mobilePrimaryIndexes,
+                        selectedIndex,
+                      );
+                      return;
+                    }
+
                     setState(() {
-                      _selectedIndex = index;
+                      _selectedIndex = hasMoreDestinations
+                          ? mobilePrimaryIndexes[index]
+                          : index;
                     });
                   },
-                  destinations: destinations
-                      .map(
-                        (destination) => NavigationDestination(
-                          icon: Icon(destination.icon),
-                          selectedIcon: Icon(destination.selectedIcon),
-                          label: destination.label,
-                        ),
-                      )
-                      .toList(),
+                  destinations: [
+                    for (final index in hasMoreDestinations
+                        ? mobilePrimaryIndexes
+                        : List<int>.generate(
+                            destinations.length,
+                            (index) => index,
+                          ))
+                      NavigationDestination(
+                        icon: Icon(destinations[index].icon),
+                        selectedIcon: Icon(destinations[index].selectedIcon),
+                        label: destinations[index].label,
+                      ),
+                    if (hasMoreDestinations)
+                      NavigationDestination(
+                        icon: const Icon(Icons.more_horiz),
+                        selectedIcon: const Icon(Icons.more),
+                        label: _t('more', 'More'),
+                      ),
+                  ],
                 ),
         );
       },
