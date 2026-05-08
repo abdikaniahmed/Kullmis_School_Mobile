@@ -1085,6 +1085,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildDashboardPage() {
     final theme = Theme.of(context);
+    final roleLabels = widget.session.roles
+        .map((role) => role.trim().replaceAll('_', ' '))
+        .where((role) => role.isNotEmpty)
+        .toList();
+    final visibleRoleLabels =
+        roleLabels.isEmpty ? <String>[_t('admin', 'Admin')] : roleLabels;
     final cards = <SummaryCardData>[
       SummaryCardData(
         label: _t('students'),
@@ -1145,23 +1151,30 @@ class _HomeScreenState extends State<HomeScreen> {
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
-                  children: widget.session.roles
+                  children: visibleRoleLabels
                       .map(
-                        (role) => Chip(
-                          label: Text(
-                            role.replaceAll('_', ' '),
+                        (role) => Container(
+                          constraints: const BoxConstraints(maxWidth: 220),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: Colors.white.withOpacity(0.85),
+                            ),
+                          ),
+                          child: Text(
+                            role,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.labelLarge?.copyWith(
+                              color: const Color(0xFF115E59),
+                              fontWeight: FontWeight.w800,
+                            ),
                           ),
-                          backgroundColor: Colors.white.withOpacity(0.14),
-                          side: BorderSide(
-                            color: Colors.white.withOpacity(0.45),
-                          ),
-                          labelStyle: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w700,
-                          ),
-                          visualDensity: VisualDensity.compact,
                         ),
                       )
                       .toList(),
