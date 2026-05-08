@@ -50,6 +50,7 @@ class _ClassCreateScreenState extends State<ClassCreateScreen> {
 
     try {
       final levels = await widget.api.attendanceLevels(widget.token);
+      final page = await widget.api.classesPage(token: widget.token);
 
       if (!mounted) {
         return;
@@ -58,6 +59,7 @@ class _ClassCreateScreenState extends State<ClassCreateScreen> {
       setState(() {
         _levels = levels;
         _levelId = levels.isNotEmpty ? levels.first.id : null;
+        _orderController.text = (page.total + 1).toString();
         _loading = false;
       });
     } on ApiException catch (error) {
@@ -168,6 +170,7 @@ class _ClassCreateScreenState extends State<ClassCreateScreen> {
             keyboardType: TextInputType.number,
             decoration: const InputDecoration(
               labelText: 'Order Number',
+              helperText: 'Auto-filled, but you can change it.',
               border: OutlineInputBorder(),
             ),
           ),

@@ -21,14 +21,59 @@ class _SubjectCreateScreenState extends State<SubjectCreateScreen> {
   final TextEditingController _nameController = TextEditingController();
 
   String _type = 'essential';
+  bool _loading = true;
   bool _saving = false;
   String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadNextOrder();
+  }
 
   @override
   void dispose() {
     _orderController.dispose();
     _nameController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadNextOrder() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    try {
+      final page = await widget.api.subjectsPage(token: widget.token);
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _orderController.text = (page.total + 1).toString();
+        _loading = false;
+      });
+    } on ApiException catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _loading = false;
+        _error = error.message;
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _loading = false;
+        _error = 'Unable to load subject order.';
+      });
+    }
   }
 
   Future<void> _submit() async {
@@ -92,6 +137,12 @@ class _SubjectCreateScreenState extends State<SubjectCreateScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_loading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(title: const Text('Add Subject')),
       body: ListView(
@@ -102,6 +153,7 @@ class _SubjectCreateScreenState extends State<SubjectCreateScreen> {
             keyboardType: TextInputType.number,
             decoration: const InputDecoration(
               labelText: 'Order Number',
+              helperText: 'Auto-filled, but you can change it.',
               border: OutlineInputBorder(),
             ),
           ),

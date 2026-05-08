@@ -50,6 +50,7 @@ class _LevelCreateScreenState extends State<LevelCreateScreen> {
 
     try {
       final subjects = await widget.api.subjects(token: widget.token);
+      final page = await widget.api.levelsPage(token: widget.token);
 
       if (!mounted) {
         return;
@@ -57,6 +58,7 @@ class _LevelCreateScreenState extends State<LevelCreateScreen> {
 
       setState(() {
         _subjects = subjects;
+        _orderController.text = (page.total + 1).toString();
         _loading = false;
       });
     } on ApiException catch (error) {
@@ -190,6 +192,7 @@ class _LevelCreateScreenState extends State<LevelCreateScreen> {
             keyboardType: TextInputType.number,
             decoration: const InputDecoration(
               labelText: 'Order (display)',
+              helperText: 'Auto-filled, but you can change it.',
               border: OutlineInputBorder(),
             ),
           ),
