@@ -354,51 +354,50 @@ class _StudentListScreenState extends State<StudentListScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                'Students',
-                                style: theme.textTheme.titleLarge,
-                              ),
-                            ),
-                            if (_canCreate)
-                              Wrap(
-                                spacing: 8,
-                                children: [
-                                  OutlinedButton.icon(
-                                    onPressed: () {
-                                      Navigator.of(context).push(
-                                        MaterialPageRoute<void>(
-                                          builder: (_) => StudentsUploadScreen(
-                                            api: widget.api,
-                                            token: widget.token,
-                                          ),
-                                        ),
-                                      );
-                                    },
-                                    icon: const Icon(Icons.upload_file),
-                                    label: const Text('Upload'),
-                                  ),
-                                  FilledButton.icon(
-                                    onPressed: () {
-                                      Navigator.of(context).push(
-                                        MaterialPageRoute<void>(
-                                          builder: (_) => StudentsCreateScreen(
-                                            api: widget.api,
-                                            token: widget.token,
-                                            session: widget.session,
-                                          ),
-                                        ),
-                                      );
-                                    },
-                                    icon: const Icon(Icons.person_add_alt_1),
-                                    label: const Text('Add Student'),
-                                  ),
-                                ],
-                              ),
-                          ],
+                        Text(
+                          'Students',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.titleLarge,
                         ),
+                        if (_canCreate) ...[
+                          const SizedBox(height: 14),
+                          Wrap(
+                            spacing: 10,
+                            runSpacing: 10,
+                            children: [
+                              OutlinedButton.icon(
+                                onPressed: () {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute<void>(
+                                      builder: (_) => StudentsUploadScreen(
+                                        api: widget.api,
+                                        token: widget.token,
+                                      ),
+                                    ),
+                                  );
+                                },
+                                icon: const Icon(Icons.upload_file),
+                                label: const Text('Upload'),
+                              ),
+                              FilledButton.icon(
+                                onPressed: () {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute<void>(
+                                      builder: (_) => StudentsCreateScreen(
+                                        api: widget.api,
+                                        token: widget.token,
+                                        session: widget.session,
+                                      ),
+                                    ),
+                                  );
+                                },
+                                icon: const Icon(Icons.person_add_alt_1),
+                                label: const Text('Add Student'),
+                              ),
+                            ],
+                          ),
+                        ],
                         const SizedBox(height: 8),
                         Text(
                           'Search by student name, phone, email, level, or class.',
