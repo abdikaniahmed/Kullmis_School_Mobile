@@ -59,7 +59,7 @@ class AcademicYearListItem {
       name: '${json['name'] ?? ''}'.trim(),
       startDate: _toNullableString(json['start_date']),
       endDate: _toNullableString(json['end_date']),
-      isActive: json['is_active'] == true,
+      isActive: _toBool(json['is_active']),
     );
   }
 }
@@ -134,7 +134,7 @@ class TermListItem {
           : null,
       startDate: _toNullableString(json['start_date']),
       endDate: _toNullableString(json['end_date']),
-      isActive: json['is_active'] == true,
+      isActive: _toBool(json['is_active']),
     );
   }
 }
@@ -446,7 +446,7 @@ class PromotionRule {
       fromClassId: _toNullableInt(json['from_class_id']),
       toLevelId: _toNullableInt(json['to_level_id']),
       toClassId: _toNullableInt(json['to_class_id']),
-      isGraduation: json['is_graduation'] == true,
+      isGraduation: _toBool(json['is_graduation']),
       eligibleCount: _toInt(json['eligible_count']),
     );
   }
@@ -499,6 +499,19 @@ int? _toNullableInt(dynamic value) {
   }
 
   return int.tryParse('$value');
+}
+
+bool _toBool(dynamic value) {
+  if (value is bool) {
+    return value;
+  }
+
+  if (value is num) {
+    return value != 0;
+  }
+
+  final normalized = '$value'.trim().toLowerCase();
+  return normalized == 'true' || normalized == '1' || normalized == 'yes';
 }
 
 String? _toNullableString(dynamic value) {
