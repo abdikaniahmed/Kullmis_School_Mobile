@@ -721,7 +721,6 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
     ];
-
   }
 
   List<_SidebarChildLink> _hrSidebarLinks() {
@@ -1690,38 +1689,67 @@ class _HomeScreenState extends State<HomeScreen> {
 
     await showModalBottomSheet<void>(
       context: context,
-      showDragHandle: true,
+      showDragHandle: false,
       builder: (context) {
         return SafeArea(
-          child: ListView.separated(
-            shrinkWrap: true,
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-            itemCount: moreIndexes.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 4),
-            itemBuilder: (context, itemIndex) {
-              final destinationIndex = moreIndexes[itemIndex];
-              final destination = destinations[destinationIndex];
-              final selected = destinationIndex == selectedIndex;
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              InkWell(
+                onTap: () => Navigator.of(context).pop(),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(24),
+                ),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: Center(
+                    child: Container(
+                      width: 50,
+                      height: 5,
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.75,
+                        ),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Flexible(
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                  itemCount: moreIndexes.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 4),
+                  itemBuilder: (context, itemIndex) {
+                    final destinationIndex = moreIndexes[itemIndex];
+                    final destination = destinations[destinationIndex];
+                    final selected = destinationIndex == selectedIndex;
 
-              return ListTile(
-                selected: selected,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
+                    return ListTile(
+                      selected: selected,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      leading: Icon(
+                        selected ? destination.selectedIcon : destination.icon,
+                        color: selected ? theme.colorScheme.primary : null,
+                      ),
+                      title: Text(destination.label),
+                      trailing: selected ? const Icon(Icons.check) : null,
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        setState(() {
+                          _selectedIndex = destinationIndex;
+                        });
+                      },
+                    );
+                  },
                 ),
-                leading: Icon(
-                  selected ? destination.selectedIcon : destination.icon,
-                  color: selected ? theme.colorScheme.primary : null,
-                ),
-                title: Text(destination.label),
-                trailing: selected ? const Icon(Icons.check) : null,
-                onTap: () {
-                  Navigator.of(context).pop();
-                  setState(() {
-                    _selectedIndex = destinationIndex;
-                  });
-                },
-              );
-            },
+              ),
+            ],
           ),
         );
       },
@@ -1800,10 +1828,9 @@ class _HomeScreenState extends State<HomeScreen> {
         final mobilePrimaryIndexes = _mobilePrimaryIndexes(destinations);
         final hasMoreDestinations =
             !useRail && destinations.length > mobilePrimaryIndexes.length;
-        final mobileSelectedIndex =
-            mobilePrimaryIndexes.contains(selectedIndex)
-                ? mobilePrimaryIndexes.indexOf(selectedIndex)
-                : mobilePrimaryIndexes.length;
+        final mobileSelectedIndex = mobilePrimaryIndexes.contains(selectedIndex)
+            ? mobilePrimaryIndexes.indexOf(selectedIndex)
+            : mobilePrimaryIndexes.length;
 
         return Scaffold(
           appBar: AppBar(
@@ -1910,9 +1937,8 @@ class _HomeScreenState extends State<HomeScreen> {
           bottomNavigationBar: useRail
               ? null
               : NavigationBar(
-                  selectedIndex: hasMoreDestinations
-                      ? mobileSelectedIndex
-                      : selectedIndex,
+                  selectedIndex:
+                      hasMoreDestinations ? mobileSelectedIndex : selectedIndex,
                   onDestinationSelected: (index) {
                     if (hasMoreDestinations &&
                         index == mobilePrimaryIndexes.length) {
