@@ -11,7 +11,6 @@ import '../services/offline_sync_queue.dart';
 import '../services/token_store.dart';
 import 'home_screen.dart';
 import 'login_screen.dart';
-import 'splash_screen.dart';
 
 class SessionGate extends StatefulWidget {
   const SessionGate({
@@ -30,7 +29,8 @@ class SessionGate extends StatefulWidget {
 }
 
 class _SessionGateState extends State<SessionGate> {
-  final OfflineSyncCoordinator _syncCoordinator = const OfflineSyncCoordinator();
+  final OfflineSyncCoordinator _syncCoordinator =
+      const OfflineSyncCoordinator();
   late Future<BootstrapResult> _bootstrapFuture;
   AuthSession? _session;
   DashboardData? _dashboard;
@@ -385,7 +385,16 @@ class _SessionGateState extends State<SessionGate> {
       future: _bootstrapFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
-          return const SplashScreen();
+          return const Scaffold(
+            backgroundColor: Color(0xFFF4EFE6),
+            body: Center(
+              child: SizedBox(
+                width: 28,
+                height: 28,
+                child: CircularProgressIndicator(strokeWidth: 3),
+              ),
+            ),
+          );
         }
 
         final result = snapshot.data ?? const BootstrapResult();
