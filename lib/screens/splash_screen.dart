@@ -5,9 +5,9 @@ class SplashScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
+    return Scaffold(
       body: DecoratedBox(
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           gradient: LinearGradient(
             colors: [Color(0xFF0F766E), Color(0xFFF4EFE6)],
             begin: Alignment.topCenter,
@@ -15,7 +15,22 @@ class SplashScreen extends StatelessWidget {
           ),
         ),
         child: Center(
-          child: CircularProgressIndicator(),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Image.asset(
+                'assets/images/splash_logo.png',
+                width: 160,
+                fit: BoxFit.contain,
+              ),
+              const SizedBox(height: 28),
+              const SizedBox(
+                width: 28,
+                height: 28,
+                child: CircularProgressIndicator(strokeWidth: 3),
+              ),
+            ],
+          ),
         ),
       ),
     );
