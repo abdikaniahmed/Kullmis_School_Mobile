@@ -1474,93 +1474,111 @@ class _HomeScreenState extends State<HomeScreen> {
       return const SizedBox.shrink();
     }
 
+    final statusParts = <TextSpan>[
+      if (showReachabilityWarning)
+        TextSpan(
+          text: _t(
+            'server_unreachable_queued_changes',
+            'Server unreachable. Queued changes will sync when connection returns.',
+          ),
+          style: const TextStyle(fontWeight: FontWeight.w600),
+        ),
+      if (message != null && message.isNotEmpty)
+        TextSpan(
+          text: message,
+          style: const TextStyle(fontWeight: FontWeight.w500),
+        ),
+      if (_pendingSyncCount > 0)
+        TextSpan(
+          text:
+              '${_t('pending_offline_sync', 'Pending offline sync')}: $_pendingSyncCount',
+          style: const TextStyle(fontWeight: FontWeight.w600),
+        ),
+      if (_syncIssueCount > 0)
+        TextSpan(
+          text:
+              '${_t('sync_conflicts_need_review', 'Sync conflicts need review')}: $_syncIssueCount',
+          style: const TextStyle(fontWeight: FontWeight.w700),
+        ),
+    ];
+    final separatedStatusParts = <InlineSpan>[];
+    for (final part in statusParts) {
+      if (separatedStatusParts.isNotEmpty) {
+        separatedStatusParts.add(const TextSpan(text: '  |  '));
+      }
+      separatedStatusParts.add(part);
+    }
+
+    final actions = <Widget>[
+      if (_syncIssueCount > 0)
+        TextButton.icon(
+          onPressed: () async => _openScreen(const SyncIssuesScreen()),
+          icon: const Icon(Icons.visibility_outlined, size: 18),
+          label: Text(_t('review')),
+        ),
+      if (_pendingSyncCount > 0 || showReachabilityWarning)
+        TextButton.icon(
+          onPressed: widget.isSyncing ? null : () async => widget.onSyncNow(),
+          icon: widget.isSyncing
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.sync, size: 18),
+          label: Text(
+            widget.isSyncing
+                ? _t('syncing', 'Syncing')
+                : _t('sync_now', 'Sync Now'),
+          ),
+        ),
+    ];
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       color: widget.usingOfflineData
           ? const Color(0xFFFFF4CE)
           : const Color(0xFFE8F5E9),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            widget.usingOfflineData ? Icons.cloud_off_outlined : Icons.info_outline,
-            size: 18,
-            color: const Color(0xFF7A4F01),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                widget.usingOfflineData
+                    ? Icons.cloud_off_outlined
+                    : Icons.info_outline,
+                size: 18,
+                color: const Color(0xFF7A4F01),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: RichText(
+                  text: TextSpan(
+                    style: const TextStyle(
+                      color: Color(0xFF7A4F01),
+                      fontSize: 14,
+                      height: 1.35,
+                    ),
+                    children: separatedStatusParts,
+                  ),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (showReachabilityWarning)
-                  Text(
-                    _t(
-                      'server_unreachable_queued_changes',
-                      'Server unreachable. Queued changes will sync when connection returns.',
-                    ),
-                    style: const TextStyle(
-                      color: Color(0xFF7A4F01),
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                if (showReachabilityWarning &&
-                    message != null &&
-                    message.isNotEmpty)
-                  const SizedBox(height: 6),
-                if (message != null && message.isNotEmpty)
-                  Text(
-                    message,
-                    style: const TextStyle(
-                      color: Color(0xFF7A4F01),
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                if (_pendingSyncCount > 0 && message != null && message.isNotEmpty)
-                  const SizedBox(height: 6),
-                if (_pendingSyncCount > 0)
-                  Text(
-                    '${_t('pending_offline_sync', 'Pending offline sync')}: $_pendingSyncCount',
-                    style: const TextStyle(
-                      color: Color(0xFF7A4F01),
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                if (_syncIssueCount > 0) ...[
-                  const SizedBox(height: 6),
-                  Text(
-                    '${_t('sync_conflicts_need_review', 'Sync conflicts need review')}: $_syncIssueCount',
-                    style: const TextStyle(
-                      color: Color(0xFF7A4F01),
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          if (_syncIssueCount > 0)
-            TextButton.icon(
-              onPressed: () async => _openScreen(const SyncIssuesScreen()),
-              icon: const Icon(Icons.visibility_outlined, size: 18),
-              label: Text(_t('review')),
-            ),
-          if (_pendingSyncCount > 0 || showReachabilityWarning)
-            TextButton.icon(
-              onPressed:
-                  widget.isSyncing ? null : () async => widget.onSyncNow(),
-              icon: widget.isSyncing
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.sync, size: 18),
-              label: Text(
-                widget.isSyncing
-                    ? _t('syncing', 'Syncing')
-                    : _t('sync_now', 'Sync Now'),
+          if (actions.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.only(left: 28),
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                children: actions,
               ),
             ),
+          ],
         ],
       ),
     );
