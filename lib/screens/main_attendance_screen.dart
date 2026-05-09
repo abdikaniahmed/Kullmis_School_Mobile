@@ -438,6 +438,7 @@ class _MainAttendanceScreenState extends State<MainAttendanceScreen> {
     }
 
     final snapshot = MainAttendanceCacheSnapshot.fromJson(json);
+    final pendingDraft = json['pending_draft'] == true;
     if (!force && !_matchesSnapshot(snapshot)) {
       return false;
     }
@@ -468,11 +469,13 @@ class _MainAttendanceScreenState extends State<MainAttendanceScreen> {
       _loadingClasses = false;
       _loadingSession = false;
       _saving = false;
-      _usingOfflineData = snapshot.session != null || snapshot.drafts.isNotEmpty;
-      _hasPendingDraft = snapshot.drafts.isNotEmpty;
-      _statusMessage = snapshot.drafts.isNotEmpty
+      _usingOfflineData =
+          snapshot.session != null || snapshot.drafts.isNotEmpty;
+      _hasPendingDraft = pendingDraft;
+      _statusMessage = pendingDraft
           ? 'Offline draft restored. Sync again when the server is reachable.'
-          : (fallbackMessage ?? 'Offline mode: showing last synced attendance data.');
+          : (fallbackMessage ??
+              'Offline mode: showing last synced attendance data.');
       _error = null;
     });
 
@@ -559,7 +562,7 @@ class _MainAttendanceScreenState extends State<MainAttendanceScreen> {
   }
 
   String _queueKeyForAttendance() {
-    return '$mainAttendanceQueuePrefix${_selectedClassId ?? 0}:${_selectedShift}:${_formatDate(_selectedDate)}';
+    return '$mainAttendanceQueuePrefix${_selectedClassId ?? 0}:$_selectedShift:${_formatDate(_selectedDate)}';
   }
 
   @override

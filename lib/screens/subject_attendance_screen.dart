@@ -99,7 +99,8 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen> {
     } on ApiException catch (error) {
       final restored = await _restoreSnapshotIfNeeded(
         force: true,
-        fallbackMessage: 'Offline mode: showing last synced subject attendance.',
+        fallbackMessage:
+            'Offline mode: showing last synced subject attendance.',
       );
       if (restored) {
         return;
@@ -116,7 +117,8 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen> {
     } catch (_) {
       final restored = await _restoreSnapshotIfNeeded(
         force: true,
-        fallbackMessage: 'Offline mode: showing last synced subject attendance.',
+        fallbackMessage:
+            'Offline mode: showing last synced subject attendance.',
       );
       if (restored) {
         return;
@@ -202,7 +204,8 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen> {
       await _writeSnapshot();
     } on ApiException catch (error) {
       final restored = await _restoreSnapshotIfNeeded(
-        fallbackMessage: 'Offline mode: showing last synced subject attendance.',
+        fallbackMessage:
+            'Offline mode: showing last synced subject attendance.',
       );
       if (restored) {
         return;
@@ -220,7 +223,8 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen> {
       });
     } catch (_) {
       final restored = await _restoreSnapshotIfNeeded(
-        fallbackMessage: 'Offline mode: showing last synced subject attendance.',
+        fallbackMessage:
+            'Offline mode: showing last synced subject attendance.',
       );
       if (restored) {
         return;
@@ -372,12 +376,14 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen> {
     bool force = false,
     String? fallbackMessage,
   }) async {
-    final json = await _cacheStore.readCacheDocument(_subjectAttendanceCacheKey);
+    final json =
+        await _cacheStore.readCacheDocument(_subjectAttendanceCacheKey);
     if (json == null) {
       return false;
     }
 
     final snapshot = SubjectAttendanceOfflineSnapshot.fromJson(json);
+    final pendingDraft = json['pending_draft'] == true;
     if (!force && !_matchesSnapshot(snapshot)) {
       return false;
     }
@@ -405,9 +411,10 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen> {
       _loadingFilters = false;
       _loadingSession = false;
       _saving = false;
-      _usingOfflineData = snapshot.session != null || snapshot.drafts.isNotEmpty;
-      _hasPendingDraft = snapshot.drafts.isNotEmpty;
-      _statusMessage = snapshot.drafts.isNotEmpty
+      _usingOfflineData =
+          snapshot.session != null || snapshot.drafts.isNotEmpty;
+      _hasPendingDraft = pendingDraft;
+      _statusMessage = pendingDraft
           ? 'Offline draft restored. Sync again when the server is reachable.'
           : (fallbackMessage ??
               'Offline mode: showing last synced subject attendance.');
@@ -580,7 +587,8 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen> {
                             SizedBox(
                               width: 240,
                               child: FilledButton(
-                                onPressed: _loadingSession ? null : _loadSession,
+                                onPressed:
+                                    _loadingSession ? null : _loadSession,
                                 child: _loadingSession
                                     ? const SizedBox(
                                         width: 18,
@@ -593,7 +601,8 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen> {
                             ),
                             if (_usingOfflineData)
                               OutlinedButton.icon(
-                                onPressed: _loadingSession ? null : _loadSession,
+                                onPressed:
+                                    _loadingSession ? null : _loadSession,
                                 icon: const Icon(Icons.cloud_sync_outlined),
                                 label: const Text('Retry Online'),
                               ),

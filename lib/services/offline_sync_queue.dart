@@ -1,5 +1,4 @@
 import '../models/exam_models.dart';
-import '../models/finance_admin_models.dart';
 import '../models/main_attendance_models.dart';
 import '../models/school_reports_models.dart';
 import '../models/subject_attendance_models.dart';
@@ -119,9 +118,12 @@ class OfflineSyncQueue {
     await clearIssue(operation.key);
   }
 
-  Future<void> remove(String key) async {
+  Future<void> remove(String key, {bool clearMatchingIssue = true}) async {
     final items = await readQueue();
     await _write(items.where((item) => item.key != key).toList());
+    if (clearMatchingIssue) {
+      await clearIssue(key);
+    }
   }
 
   Future<int> count() async {
@@ -219,7 +221,6 @@ class OfflineSyncCoordinator {
     final items = await queue.readQueue();
     var flushed = 0;
     var failed = 0;
-    var issues = 0;
 
     for (final item in items) {
       try {
@@ -238,8 +239,7 @@ class OfflineSyncCoordinator {
               createdAt: DateTime.now().toIso8601String(),
             ),
           );
-          await queue.remove(item.key);
-          issues += 1;
+          await queue.remove(item.key, clearMatchingIssue: false);
           continue;
         }
         failed += 1;
@@ -394,10 +394,11 @@ class OfflineSyncCoordinator {
         await api.assignBusStudents(
           token: token,
           busId: _toInt(item.payload['bus_id']),
-          studentIds: (item.payload['student_ids'] as List<dynamic>? ?? const [])
-              .map(_toInt)
-              .where((value) => value > 0)
-              .toList(),
+          studentIds:
+              (item.payload['student_ids'] as List<dynamic>? ?? const [])
+                  .map(_toInt)
+                  .where((value) => value > 0)
+                  .toList(),
         );
         return;
       case _subjectTimetableType:

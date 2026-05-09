@@ -533,6 +533,7 @@ class _ExamMarkEntryScreenState extends State<ExamMarkEntryScreen> {
     }
 
     final snapshot = ExamMarkEntryOfflineSnapshot.fromJson(json);
+    final pendingDraft = json['pending_draft'] == true;
 
     if (!mounted) {
       return true;
@@ -575,8 +576,8 @@ class _ExamMarkEntryScreenState extends State<ExamMarkEntryScreen> {
       _loadingRoster = false;
       _saving = false;
       _usingOfflineData = students.isNotEmpty || snapshot.drafts.isNotEmpty;
-      _hasPendingDraft = snapshot.drafts.isNotEmpty;
-      _statusMessage = snapshot.drafts.isNotEmpty
+      _hasPendingDraft = pendingDraft;
+      _statusMessage = pendingDraft
           ? 'Offline draft restored. Sync marks again when the server is reachable.'
           : fallbackMessage;
       _error = null;
