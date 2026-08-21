@@ -127,7 +127,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           Text(
                             context.tr(
                               'mobile_login_subtitle',
-                              'Sign in with your Laravel account to open the mobile dashboard.',
+                              'Sign in to your account.',
                             ),
                             style: theme.textTheme.bodyLarge,
                           ),
@@ -197,16 +197,6 @@ class _LoginScreenState extends State<LoginScreen> {
                                   )
                                   : Text(context.tr('login')),
                             ),
-                          ),
-                          const SizedBox(height: 18),
-                          Text(
-                            context.tr('api_base_url', 'API base URL'),
-                            style: theme.textTheme.titleLarge,
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            widget.apiBaseUrl,
-                            style: theme.textTheme.bodyMedium,
                           ),
                         ],
                       ),

@@ -801,7 +801,7 @@ const appMessages = <String, Map<String, String>>{
     'add_new_document': 'Add New Document',
     'refresh': 'Refresh',
     'api_base_url': 'API base URL',
-    'mobile_login_subtitle': 'Sign in with your Laravel account to open the mobile dashboard.',
+    'mobile_login_subtitle': 'Sign in to your account.',
     'unable_connect_api': 'Unable to connect to the API. Check the base URL and network access.',
     'kullmis_school_mobile': 'Kullmis School Mobile',
     'kullmis_school_system': 'Kullmis School System',
