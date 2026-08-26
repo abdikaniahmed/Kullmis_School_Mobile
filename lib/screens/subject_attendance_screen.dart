@@ -838,8 +838,8 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen> {
       columnWidths: const {
         0: FixedColumnWidth(55),
         1: FlexColumnWidth(3),
-        2: FlexColumnWidth(2),
-        3: FlexColumnWidth(3),
+        2: FlexColumnWidth(2.5),
+        3: FlexColumnWidth(2.5),
       },
       border: TableBorder.all(color: const Color(0xFFE2E8F0)),
       defaultVerticalAlignment: TableCellVerticalAlignment.middle,
@@ -891,16 +891,25 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen> {
             value: _statusOptions.contains(draft.status)
                 ? draft.status
                 : 'present',
+            isExpanded: true,
+            style: const TextStyle(
+              color: Color(0xFF1F2933),
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
             decoration: const InputDecoration(
               border: OutlineInputBorder(),
               isDense: true,
-              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
             ),
             items: _statusOptions
                 .map(
                   (status) => DropdownMenuItem<String>(
                     value: status,
-                    child: Text(_titleCase(status)),
+                    child: Text(
+                      _titleCase(status),
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                 )
                 .toList(),

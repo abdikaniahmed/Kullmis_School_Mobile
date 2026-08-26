@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../models/main_attendance_models.dart';
 import '../models/school_reports_models.dart';
 import '../models/subject_attendance_models.dart';
 import '../services/laravel_api.dart';
@@ -330,6 +329,24 @@ class _SubjectAttendanceReportScreenState
                             Chip(label: Text('Total ${item.total}')),
                           ],
                         ),
+                        if (item.absentStudents.isNotEmpty) ...[
+                          const SizedBox(height: 14),
+                          Text(
+                            'Absent Students',
+                            style: theme.textTheme.titleSmall,
+                          ),
+                          const SizedBox(height: 6),
+                          ...item.absentStudents.map(
+                            (student) => Padding(
+                              padding: const EdgeInsets.only(bottom: 4),
+                              child: Text(
+                                '${student.name ?? '-'}'
+                                '${student.rollNumber == null ? '' : ' · ${student.rollNumber}'}'
+                                '${student.remarks == null || student.remarks!.isEmpty ? '' : ' · ${student.remarks}'}',
+                              ),
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),

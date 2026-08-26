@@ -127,6 +127,7 @@ class SubjectAttendanceReportItem {
     required this.late,
     required this.excused,
     required this.total,
+    required this.absentStudents,
   });
 
   final int id;
@@ -141,6 +142,7 @@ class SubjectAttendanceReportItem {
   final int late;
   final int excused;
   final int total;
+  final List<SubjectAttendanceAbsentStudent> absentStudents;
 
   factory SubjectAttendanceReportItem.fromJson(Map<String, dynamic> json) {
     return SubjectAttendanceReportItem(
@@ -156,6 +158,33 @@ class SubjectAttendanceReportItem {
       late: _toInt(json['late']),
       excused: _toInt(json['excused']),
       total: _toInt(json['total']),
+      absentStudents: (json['absent_students'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(SubjectAttendanceAbsentStudent.fromJson)
+          .toList(),
+    );
+  }
+}
+
+class SubjectAttendanceAbsentStudent {
+  const SubjectAttendanceAbsentStudent({
+    required this.studentId,
+    required this.name,
+    required this.rollNumber,
+    required this.remarks,
+  });
+
+  final int studentId;
+  final String? name;
+  final String? rollNumber;
+  final String? remarks;
+
+  factory SubjectAttendanceAbsentStudent.fromJson(Map<String, dynamic> json) {
+    return SubjectAttendanceAbsentStudent(
+      studentId: _toInt(json['student_id']),
+      name: _toNullableString(json['name']),
+      rollNumber: _toNullableString(json['roll_number']),
+      remarks: _toNullableString(json['remarks']),
     );
   }
 }
