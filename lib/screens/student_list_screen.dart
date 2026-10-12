@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../models/auth_session.dart';
 import '../models/main_attendance_models.dart';
@@ -329,402 +330,441 @@ class _StudentListScreenState extends State<StudentListScreen> {
     );
   }
 
+  static const _teal = Color(0xFF087F79);
+  static const _ink = Color(0xFF101A36);
+
+  String _phone(StudentListItem item) {
+    final phone = (item.phone ?? '').replaceAll(RegExp(r'[\s().-]'), '');
+    return RegExp(r'^\+?[0-9]+$').hasMatch(phone) ? phone : '';
+  }
+
+  Future<void> _contact(StudentListItem item, String scheme) async {
+    if (_phone(item).isEmpty) return;
+    final message = scheme == 'tel'
+        ? 'Unable to open the phone dialer.'
+        : 'Unable to open the messaging app.';
+    try {
+      if (!await launchUrl(Uri(scheme: scheme, path: _phone(item)),
+          mode: LaunchMode.externalApplication)) {
+        _showMessage(message);
+      }
+    } catch (_) {
+      _showMessage(message);
+    }
+  }
+
+  Future<void> _openEditor([StudentListItem? item]) async {
+    await Navigator.of(context).push(MaterialPageRoute<void>(
+        builder: (_) => item == null
+            ? StudentsCreateScreen(
+                api: widget.api, token: widget.token, session: widget.session)
+            : StudentsEditScreen(
+                api: widget.api,
+                token: widget.token,
+                session: widget.session,
+                studentId: item.id)));
+    if (mounted) await _loadStudents(page: _page?.currentPage ?? 1);
+  }
+
+  ButtonStyle _buttonStyle(bool filled) => (filled
+          ? FilledButton.styleFrom(
+              backgroundColor: _teal, foregroundColor: Colors.white)
+          : OutlinedButton.styleFrom(
+              foregroundColor: _teal, side: const BorderSide(color: _teal)))
+      .copyWith(
+          minimumSize: const WidgetStatePropertyAll(Size(0, 46)),
+          padding: const WidgetStatePropertyAll(
+              EdgeInsets.symmetric(horizontal: 12)),
+          shape: WidgetStatePropertyAll(
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))));
+
+  Widget _panel(Widget child) => Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+          color: Colors.white, borderRadius: BorderRadius.circular(20)),
+      child: child);
+
+  InputDecoration _input(String label, IconData icon) => InputDecoration(
+      labelText: label,
+      prefixIcon: Icon(icon, size: 20, color: _ink),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+      enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFFDFE3E7))));
+
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final page = _page;
-
     return Scaffold(
+      backgroundColor: const Color(0xFFF7F5EF),
       appBar: AppBar(
-        title: const Text('Student List'),
-      ),
+          title: const Text('Student List',
+              style: TextStyle(fontWeight: FontWeight.w700)),
+          backgroundColor: const Color(0xFFEAF5F3),
+          foregroundColor: _ink,
+          surfaceTintColor: Colors.transparent),
       body: _loadingMeta
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
               onRefresh: () => _loadStudents(page: 1),
               child: ListView(
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(24),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Students',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.titleLarge,
-                        ),
-                        if (_canCreate) ...[
-                          const SizedBox(height: 14),
-                          Wrap(
-                            spacing: 10,
-                            runSpacing: 10,
-                            children: [
-                              OutlinedButton.icon(
-                                onPressed: () {
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute<void>(
-                                      builder: (_) => StudentsUploadScreen(
-                                        api: widget.api,
-                                        token: widget.token,
-                                      ),
-                                    ),
-                                  );
-                                },
-                                icon: const Icon(Icons.upload_file),
-                                label: const Text('Upload'),
-                              ),
-                              FilledButton.icon(
-                                onPressed: () {
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute<void>(
-                                      builder: (_) => StudentsCreateScreen(
-                                        api: widget.api,
-                                        token: widget.token,
-                                        session: widget.session,
-                                      ),
-                                    ),
-                                  );
-                                },
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(14, 12, 14, 24),
+                  children: [
+                    if (_canCreate) ...[
+                      Row(children: [
+                        Expanded(
+                            child: FilledButton.icon(
+                                style: _buttonStyle(true),
+                                onPressed: () => _openEditor(),
                                 icon: const Icon(Icons.person_add_alt_1),
-                                label: const Text('Add Student'),
-                              ),
-                            ],
-                          ),
-                        ],
-                        const SizedBox(height: 8),
-                        Text(
-                          'Search by student name, phone, email, level, or class.',
-                          style: theme.textTheme.bodyMedium,
-                        ),
-                        if (_statusMessage != null) ...[
-                          const SizedBox(height: 12),
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFFFF4CE),
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            child: Row(
-                              children: [
-                                const Icon(
-                                  Icons.cloud_off_outlined,
-                                  size: 18,
-                                  color: Color(0xFF7A4F01),
-                                ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Text(
-                                    _statusMessage!,
-                                    style: theme.textTheme.bodyMedium?.copyWith(
-                                      color: const Color(0xFF7A4F01),
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(24),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Find Students', style: theme.textTheme.titleLarge),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Search by student name, phone, email, level, or class.',
-                          style: theme.textTheme.bodyMedium,
-                        ),
-                        const SizedBox(height: 18),
-                        TextField(
+                                label: const Text('Add Student'))),
+                        const SizedBox(width: 10),
+                        Expanded(
+                            child: OutlinedButton.icon(
+                                style: _buttonStyle(false),
+                                onPressed: () async {
+                                  await Navigator.of(context).push(
+                                      MaterialPageRoute<void>(
+                                          builder: (_) => StudentsUploadScreen(
+                                              api: widget.api,
+                                              token: widget.token)));
+                                  if (mounted) await _loadStudents(page: 1);
+                                },
+                                icon: const Icon(Icons.upload_file_outlined),
+                                label: const Text('Upload'))),
+                      ]),
+                      const SizedBox(height: 12),
+                    ],
+                    _panel(Column(children: [
+                      TextField(
                           controller: _searchController,
                           textInputAction: TextInputAction.search,
-                          decoration: const InputDecoration(
-                            labelText: 'Search students',
-                            hintText: 'Name, phone, or email',
-                            border: OutlineInputBorder(),
-                            prefixIcon: Icon(Icons.search),
-                          ),
-                          onSubmitted: (_) => _loadStudents(page: 1),
-                        ),
-                        const SizedBox(height: 14),
-                        DropdownButtonFormField<int>(
-                          value: _selectedLevelId,
-                          decoration: const InputDecoration(
-                            labelText: 'Level',
-                            border: OutlineInputBorder(),
-                          ),
-                          items: [
-                            const DropdownMenuItem<int>(
-                              value: null,
-                              child: Text('All Levels'),
-                            ),
-                            ..._levels.map(
-                              (level) => DropdownMenuItem<int>(
-                                value: level.id,
-                                child: Text(level.name),
-                              ),
-                            ),
-                          ],
-                          onChanged: _loadingClasses
-                              ? null
-                              : (value) async {
-                                  await _applyLevel(value);
-                                },
-                        ),
-                        const SizedBox(height: 14),
-                        DropdownButtonFormField<int>(
-                          value: _selectedClassId,
-                          decoration: const InputDecoration(
-                            labelText: 'Class',
-                            border: OutlineInputBorder(),
-                          ),
-                          items: [
-                            const DropdownMenuItem<int>(
-                              value: null,
-                              child: Text('All Classes'),
-                            ),
-                            ..._classes.map(
-                              (schoolClass) => DropdownMenuItem<int>(
-                                value: schoolClass.id,
-                                child: Text(schoolClass.name),
-                              ),
-                            ),
-                          ],
-                          onChanged: _loadingClasses
-                              ? null
-                              : (value) async {
-                                  setState(() {
-                                    _selectedClassId = value;
+                          decoration: _input('Search students', Icons.search)
+                              .copyWith(
+                                  hintText:
+                                      'Name, phone, email, level, or class...',
+                                  filled: true,
+                                  fillColor: const Color(0xFFF8FAFC)),
+                          onSubmitted: (_) => _loadStudents(page: 1)),
+                      const SizedBox(height: 18),
+                      LayoutBuilder(builder: (context, constraints) {
+                        final level = DropdownButtonFormField<int>(
+                            initialValue: _selectedLevelId,
+                            isExpanded: true,
+                            decoration: _input('Level', Icons.school_outlined),
+                            items: [
+                              const DropdownMenuItem<int>(
+                                  value: null, child: Text('All Levels')),
+                              ..._levels.map((e) => DropdownMenuItem<int>(
+                                  value: e.id,
+                                  child: Text(e.name,
+                                      overflow: TextOverflow.ellipsis)))
+                            ],
+                            onChanged: _loadingClasses ? null : _applyLevel);
+                        final schoolClass = DropdownButtonFormField<int>(
+                            initialValue: _selectedClassId,
+                            isExpanded: true,
+                            decoration: _input('Class', Icons.groups_outlined),
+                            items: [
+                              const DropdownMenuItem<int>(
+                                  value: null, child: Text('All Classes')),
+                              ..._classes.map((e) => DropdownMenuItem<int>(
+                                  value: e.id,
+                                  child: Text(e.name,
+                                      overflow: TextOverflow.ellipsis)))
+                            ],
+                            onChanged: _loadingClasses
+                                ? null
+                                : (value) async {
+                                    setState(() => _selectedClassId = value);
+                                    await _loadStudents(page: 1);
                                   });
-                                  await _loadStudents(page: 1);
-                                },
-                        ),
-                        const SizedBox(height: 16),
-                        Wrap(
-                          spacing: 12,
-                          runSpacing: 12,
-                          children: [
-                            FilledButton.icon(
-                              onPressed: _loadingList
-                                  ? null
-                                  : () => _loadStudents(page: 1),
-                              icon: const Icon(Icons.search),
-                              label: const Text('Search'),
-                            ),
-                            if (_usingOfflineData)
-                              OutlinedButton.icon(
+                        if (constraints.maxWidth < 330 ||
+                            MediaQuery.textScalerOf(context).scale(14) > 18) {
+                          return Column(children: [
+                            level,
+                            const SizedBox(height: 14),
+                            schoolClass
+                          ]);
+                        }
+                        return Row(children: [
+                          Expanded(child: level),
+                          const SizedBox(width: 10),
+                          Expanded(child: schoolClass)
+                        ]);
+                      }),
+                      const SizedBox(height: 14),
+                      Row(children: [
+                        Expanded(
+                            flex: 2,
+                            child: FilledButton.icon(
+                                style: _buttonStyle(true),
                                 onPressed: _loadingList
                                     ? null
                                     : () => _loadStudents(page: 1),
-                                icon: const Icon(Icons.cloud_sync_outlined),
-                                label: const Text('Retry Online'),
-                              ),
-                            OutlinedButton(
-                              onPressed: _loadingList ? null : _clearFilters,
-                              child: const Text('Clear'),
-                            ),
-                          ],
-                        ),
-                        if (_error != null) ...[
-                          const SizedBox(height: 14),
-                          Text(
-                            _error!,
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: const Color(0xFFB42318),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  if (_loadingList)
-                    const Center(child: CircularProgressIndicator())
-                  else if (page == null || page.items.isEmpty)
-                    Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(24),
-                      ),
-                      child: Text(
-                        'No students found.',
-                        style: theme.textTheme.bodyLarge,
-                      ),
-                    )
-                  else ...[
-                    Container(
-                      padding: const EdgeInsets.all(18),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(24),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Students', style: theme.textTheme.titleLarge),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Showing ${page.from ?? 0} - ${page.to ?? 0} of ${page.total}',
-                            style: theme.textTheme.bodyMedium,
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    ...page.items.map(_buildStudentCard),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
+                                icon: const Icon(Icons.search),
+                                label: const Text('Search'))),
+                        const SizedBox(width: 10),
                         Expanded(
-                          child: OutlinedButton(
-                            onPressed: page.hasPreviousPage && !_loadingList
-                                ? () => _loadStudents(page: page.currentPage - 1)
-                                : null,
-                            child: const Text('Prev'),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: FilledButton(
-                            onPressed: page.hasNextPage && !_loadingList
-                                ? () => _loadStudents(page: page.currentPage + 1)
-                                : null,
-                            child: const Text('Next'),
-                          ),
-                        ),
+                            child: OutlinedButton.icon(
+                                style: _buttonStyle(false),
+                                onPressed: _loadingList ? null : _clearFilters,
+                                icon: const Icon(Icons.restart_alt),
+                                label: const Text('Clear'))),
+                      ]),
+                      if (_statusMessage != null) ...[
+                        const SizedBox(height: 12),
+                        Text(_statusMessage!,
+                            style: const TextStyle(color: Color(0xFF7A4F01)))
                       ],
-                    ),
-                  ],
-                ],
-              ),
-            ),
+                      if (_usingOfflineData)
+                        TextButton.icon(
+                            onPressed: _loadingList
+                                ? null
+                                : () => _loadStudents(page: 1),
+                            icon: const Icon(Icons.cloud_sync_outlined),
+                            label: const Text('Retry Online')),
+                      if (_error != null) ...[
+                        const SizedBox(height: 12),
+                        Text(_error!,
+                            style: const TextStyle(color: Color(0xFFB42318)))
+                      ],
+                    ])),
+                    const SizedBox(height: 20),
+                    Text('Students (${page?.total ?? 0})',
+                        style: const TextStyle(
+                            fontSize: 21,
+                            fontWeight: FontWeight.w700,
+                            color: _ink)),
+                    const SizedBox(height: 4),
+                    if (page != null)
+                      Text(
+                          'Showing ${page.from ?? 0} - ${page.to ?? 0} of ${page.total}',
+                          style: const TextStyle(color: Color(0xFF77808E))),
+                    const SizedBox(height: 12),
+                    if (_loadingList)
+                      const Padding(
+                          padding: EdgeInsets.all(24),
+                          child: Center(child: CircularProgressIndicator()))
+                    else if (page == null || page.items.isEmpty)
+                      _panel(const Text('No students found.'))
+                    else ...[
+                      ...page.items.map(_buildStudentCard),
+                      const SizedBox(height: 4),
+                      Row(children: [
+                        Expanded(
+                            child: OutlinedButton(
+                                style: _buttonStyle(false),
+                                onPressed: page.hasPreviousPage
+                                    ? () => _loadStudents(
+                                        page: page.currentPage - 1)
+                                    : null,
+                                child: const Text('Prev'))),
+                        Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            child:
+                                Text('${page.currentPage} / ${page.lastPage}')),
+                        Expanded(
+                            child: FilledButton(
+                                style: _buttonStyle(true),
+                                onPressed: page.hasNextPage
+                                    ? () => _loadStudents(
+                                        page: page.currentPage + 1)
+                                    : null,
+                                child: const Text('Next'))),
+                      ]),
+                    ],
+                  ])),
     );
   }
 
+  Widget _badge(String text, IconData icon, Color color, Color background) =>
+      Container(
+          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+          decoration: BoxDecoration(
+              color: background, borderRadius: BorderRadius.circular(20)),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(icon, size: 16, color: color),
+            const SizedBox(width: 5),
+            Flexible(
+                child: Text(text,
+                    style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: color)))
+          ]));
+
   Widget _buildStudentCard(StudentListItem item) {
+    const colors = [
+      Color(0xFF2196E5),
+      Color(0xFFE6A000),
+      Color(0xFFD93670),
+      Color(0xFF0D9C86)
+    ];
+    final color = colors[item.id.abs() % colors.length];
+    final hasPhone = _phone(item).isNotEmpty;
     return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
-      child: Container(
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(24),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              item.name,
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF1F2933),
-              ),
-            ),
-            const SizedBox(height: 10),
-            _DetailRow(
-              label: 'Level',
-              value: item.currentYear?.levelName ?? '-',
-            ),
-            _DetailRow(
-              label: 'Class',
-              value: item.currentYear?.className ?? '-',
-            ),
-            _DetailRow(
-              label: 'Phone',
-              value: item.phone ?? '-',
-            ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: [
-                FilledButton.icon(
-                  onPressed: () {
-                    Navigator.of(context).push(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: _panel(
+            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            CircleAvatar(
+                radius: 25,
+                backgroundColor: color.withValues(alpha: 0.10),
+                child: Icon(Icons.school, size: 29, color: color)),
+            const SizedBox(width: 12),
+            Expanded(
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                  Text(item.name,
+                      style: const TextStyle(
+                          fontSize: 17,
+                          height: 1.25,
+                          fontWeight: FontWeight.w700,
+                          color: _ink)),
+                  const SizedBox(height: 8),
+                  Wrap(spacing: 6, runSpacing: 6, children: [
+                    _badge(
+                        item.currentYear?.levelName ?? 'No level',
+                        Icons.menu_book,
+                        const Color(0xFF168DDA),
+                        const Color(0xFFEAF6FE)),
+                    _badge(item.currentYear?.className ?? 'No class',
+                        Icons.groups, _teal, const Color(0xFFE6F5F1)),
+                  ]),
+                ])),
+          ]),
+          const SizedBox(height: 8),
+          Row(children: [
+            Expanded(
+                child: TextButton.icon(
+                    style: TextButton.styleFrom(
+                        foregroundColor: _ink,
+                        alignment: Alignment.centerLeft,
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        minimumSize: const Size(0, 48)),
+                    onPressed: hasPhone ? () => _contact(item, 'tel') : null,
+                    icon: const Icon(Icons.phone, color: _teal, size: 18),
+                    label: Text(
+                        item.phone?.trim().isNotEmpty == true
+                            ? item.phone!
+                            : 'No phone number',
+                        overflow: TextOverflow.ellipsis))),
+            IconButton.filledTonal(
+                tooltip: 'Message ${item.name}',
+                style: IconButton.styleFrom(
+                    backgroundColor: const Color(0xFFEAF6F3),
+                    foregroundColor: _teal),
+                onPressed: hasPhone ? () => _contact(item, 'sms') : null,
+                icon: const Icon(Icons.chat_outlined, size: 21)),
+            const SizedBox(width: 6),
+            IconButton.filledTonal(
+                tooltip: 'Call ${item.name}',
+                style: IconButton.styleFrom(
+                    backgroundColor: const Color(0xFFEAF6F3),
+                    foregroundColor: _teal),
+                onPressed: hasPhone ? () => _contact(item, 'tel') : null,
+                icon: const Icon(Icons.call, size: 21)),
+          ]),
+          const SizedBox(height: 6),
+          LayoutBuilder(builder: (context, constraints) {
+            final actions = <Widget>[
+              FilledButton.icon(
+                  style: _buttonStyle(true),
+                  onPressed: () => Navigator.of(context).push(
                       MaterialPageRoute<void>(
-                        builder: (_) => StudentDetailScreen(
-                          api: widget.api,
-                          token: widget.token,
-                          session: widget.session,
-                          student: item,
-                        ),
-                      ),
-                    );
-                  },
-                  icon: const Icon(Icons.person_outline),
-                  label: const Text('Open Profile'),
-                ),
-                if (_canViewMarks)
-                  OutlinedButton.icon(
-                    onPressed: () {
-                      Navigator.of(context).push(
+                          builder: (_) => StudentDetailScreen(
+                              api: widget.api,
+                              token: widget.token,
+                              session: widget.session,
+                              student: item))),
+                  icon: constraints.maxWidth >= 350
+                      ? const Icon(Icons.person_outline, size: 18)
+                      : null,
+                  label: const FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text('Open Profile', maxLines: 1))),
+              if (_canViewMarks)
+                OutlinedButton.icon(
+                    style: _buttonStyle(false),
+                    onPressed: () => Navigator.of(context).push(
                         MaterialPageRoute<void>(
-                          builder: (_) => ExamReportScreen(
-                            api: widget.api,
-                            token: widget.token,
-                          ),
-                        ),
-                      );
-                    },
-                    icon: const Icon(Icons.assessment_outlined),
-                    label: const Text('Gradebook'),
-                  ),
-                if (_canEdit)
-                  OutlinedButton.icon(
-                    onPressed: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) => StudentsEditScreen(
-                            api: widget.api,
-                            token: widget.token,
-                            session: widget.session,
-                            studentId: item.id,
-                          ),
-                        ),
-                      );
-                    },
-                    icon: const Icon(Icons.edit_outlined),
-                    label: const Text('Edit'),
-                  ),
-                if (_canEdit)
-                  OutlinedButton.icon(
-                    onPressed: () => _promptDisable(item),
-                    icon: const Icon(Icons.block_outlined),
-                    label: const Text('Disable'),
-                  ),
-                if (_canDelete)
-                  OutlinedButton.icon(
-                    onPressed: () => _confirmDelete(item),
-                    icon: const Icon(Icons.delete_outline),
-                    label: const Text('Delete'),
-                  ),
+                            builder: (_) => ExamReportScreen(
+                                api: widget.api, token: widget.token))),
+                    icon: constraints.maxWidth >= 350
+                        ? const Icon(Icons.bar_chart, size: 18)
+                        : null,
+                    label: const FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text('Gradebook', maxLines: 1))),
+            ];
+            return Row(children: [
+              Expanded(child: actions.first),
+              if (actions.length > 1) ...[
+                const SizedBox(width: 8),
+                Expanded(child: actions.last)
               ],
-            ),
-          ],
-        ),
-      ),
-    );
+              if (_canEdit || _canDelete) ...[
+                const SizedBox(width: 8),
+                SizedBox(width: 48, height: 48, child: _studentMenu(item))
+              ]
+            ]);
+          }),
+        ])));
   }
+
+  Widget _studentMenu(StudentListItem item) => PopupMenuButton<String>(
+      tooltip: 'More actions for ${item.name}',
+      position: PopupMenuPosition.under,
+      offset: const Offset(0, 4),
+      useRootNavigator: true,
+      style: IconButton.styleFrom(
+        side: const BorderSide(color: Color(0xFFDFE3E7)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+      icon: const Icon(Icons.more_horiz, color: _ink),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      onSelected: (action) {
+        switch (action) {
+          case 'edit':
+            _openEditor(item);
+            break;
+          case 'disable':
+            _promptDisable(item);
+            break;
+          case 'delete':
+            _confirmDelete(item);
+            break;
+        }
+      },
+      itemBuilder: (_) => [
+            if (_canEdit) ...[
+              const PopupMenuItem(
+                  value: 'edit',
+                  child: ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(Icons.edit_outlined),
+                      title: Text('Edit'))),
+              const PopupMenuItem(
+                  value: 'disable',
+                  child: ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(Icons.block_outlined),
+                      title: Text('Disable'))),
+            ],
+            if (_canDelete)
+              const PopupMenuItem(
+                  value: 'delete',
+                  child: ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading:
+                          Icon(Icons.delete_outline, color: Color(0xFFB42318)),
+                      title: Text('Delete',
+                          style: TextStyle(color: Color(0xFFB42318))))),
+          ]);
 }
 
 extension on _StudentListScreenState {
@@ -837,40 +877,6 @@ extension on _StudentListScreenState {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(message)));
-  }
-}
-
-class _DetailRow extends StatelessWidget {
-  const _DetailRow({
-    required this.label,
-    required this.value,
-  });
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 72,
-            child: Text(
-              label,
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: Theme.of(context).textTheme.bodyLarge,
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }
 
