@@ -328,16 +328,17 @@ class _RevenueChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scale = MediaQuery.textScalerOf(context).scale(10) / 10;
     final maximum = months.fold<double>(
         0, (value, month) => math.max(value, month.total.abs()));
     final ceiling = maximum == 0 ? 100.0 : maximum * 1.2;
     return LayoutBuilder(builder: (context, constraints) {
-      final chartWidth =
-          math.max(constraints.maxWidth - 38, months.length * 52.0);
+      final chartWidth = math.max(
+          constraints.maxWidth - 38 * scale, months.length * 52.0 * scale);
       return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
         SizedBox(
-            width: 38,
-            height: 160,
+            width: 38 * scale,
+            height: 160 * scale,
             child: Column(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -351,13 +352,13 @@ class _RevenueChart extends StatelessWidget {
           scrollDirection: Axis.horizontal,
           child: SizedBox(
               width: chartWidth,
-              height: 190,
+              height: 190 * scale,
               child: Stack(children: [
                 Positioned(
-                    top: 6,
+                    top: 6 * scale,
                     left: 0,
                     right: 0,
-                    height: 148,
+                    height: 148 * scale,
                     child: Column(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: List.generate(
@@ -367,8 +368,8 @@ class _RevenueChart extends StatelessWidget {
                 Row(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: months.map((month) {
-                      final height =
-                          (month.total.abs() / ceiling * 125).clamp(2.0, 125.0);
+                      final height = (month.total.abs() / ceiling * 148 * scale)
+                          .clamp(2.0, 148.0 * scale);
                       return Expanded(
                           child: Semantics(
                         label: '${month.label}: ${_money(month.total)}',
@@ -380,7 +381,7 @@ class _RevenueChart extends StatelessWidget {
                                 Text(_axis(month.total),
                                     style: const TextStyle(
                                         fontSize: 9, color: _ink)),
-                                const SizedBox(height: 5),
+                                SizedBox(height: 5 * scale),
                                 Container(
                                     height: height,
                                     width: 28,
@@ -400,9 +401,9 @@ class _RevenueChart extends StatelessWidget {
                                         borderRadius:
                                             const BorderRadius.vertical(
                                                 top: Radius.circular(5)))),
-                                const SizedBox(height: 10),
+                                SizedBox(height: 10 * scale),
                                 SizedBox(
-                                    height: 25,
+                                    height: 25 * scale,
                                     child: Text(month.label,
                                         style: const TextStyle(
                                             fontSize: 10, color: _muted))),
@@ -497,8 +498,8 @@ class _PeriodBadge extends StatelessWidget {
 
 String _money(double value) {
   final parts = value.abs().toStringAsFixed(2).split('.');
-  final whole = parts.first
-      .replaceAllMapped(RegExp(r'(d)(?=(d{3})+$)'), (match) => '${match[1]},');
+  final whole = parts.first.replaceAllMapped(
+      RegExp(r'([0-9])(?=([0-9]{3})+$)'), (match) => '${match[1]},');
   return '${value < 0 ? '-' : ''}\$ $whole.${parts.last}';
 }
 
