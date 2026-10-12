@@ -193,10 +193,12 @@ class FeeInvoiceStudentSummary {
   const FeeInvoiceStudentSummary({
     required this.id,
     required this.name,
+    required this.phone,
   });
 
   final int id;
   final String name;
+  final String? phone;
 
   static FeeInvoiceStudentSummary? fromDynamic(dynamic value) {
     if (value is! Map<String, dynamic>) {
@@ -206,6 +208,7 @@ class FeeInvoiceStudentSummary {
     return FeeInvoiceStudentSummary(
       id: _toInt(value['id']),
       name: '${value['name'] ?? ''}'.trim(),
+      phone: _toNullableString(value['phone']),
     );
   }
 
@@ -213,6 +216,7 @@ class FeeInvoiceStudentSummary {
     return {
       'id': id,
       'name': name,
+      'phone': phone,
     };
   }
 }

@@ -8,7 +8,7 @@ import '../models/auth_session.dart';
 import '../models/dashboard_data.dart';
 import '../services/laravel_api.dart';
 import '../services/offline_sync_queue.dart';
-import '../widgets/summary_card.dart';
+import '../widgets/dashboard_overview.dart';
 import 'academic_years_screen.dart';
 import 'attendance_report_screen.dart';
 import 'attendance_settings_screen.dart';
@@ -25,6 +25,7 @@ import 'expenses_screen.dart';
 import 'fee_invoices_screen.dart';
 import 'fee_payments_screen.dart';
 import 'fee_structures_screen.dart';
+import 'generate_fee_invoices_screen.dart';
 import 'general_settings_screen.dart';
 import 'grade_setup_screen.dart';
 import 'levels_screen.dart';
@@ -606,6 +607,17 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
       ),
+      if (widget.session.hasPermission('fees.generate'))
+        _SidebarChildLink(
+          label: _t('generate_invoices'),
+          icon: Icons.post_add_outlined,
+          onPressed: () => _openScreen(
+            GenerateFeeInvoicesScreen(
+              api: widget.api,
+              token: widget.session.token,
+            ),
+          ),
+        ),
     ];
 
     if (_canPayFees) {
@@ -1083,167 +1095,37 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildDashboardPage() {
-    final theme = Theme.of(context);
-    final roleLabels = widget.session.roles
-        .map((role) => role.trim().replaceAll('_', ' '))
-        .where((role) => role.isNotEmpty)
-        .toList();
-    final visibleRoleLabels =
-        roleLabels.isEmpty ? <String>[_t('admin', 'Admin')] : roleLabels;
-    final cards = <SummaryCardData>[
-      SummaryCardData(
-        label: _t('students'),
-        value: widget.dashboard?.studentsLabel ?? '--',
-        tone: const Color(0xFFE0F2FE),
-      ),
-      SummaryCardData(
-        label: _t('teachers'),
-        value: widget.dashboard?.teachersLabel ?? '--',
-        tone: const Color(0xFFFEF3C7),
-      ),
-      SummaryCardData(
-        label: _t('subjects'),
-        value: widget.dashboard?.subjectsLabel ?? '--',
-        tone: const Color(0xFFDCFCE7),
-      ),
-      SummaryCardData(
-        label: _t('attendance'),
-        value: widget.dashboard?.attendanceLabel ?? '--',
-        tone: const Color(0xFFFCE7F3),
-      ),
-    ];
-
-    return RefreshIndicator(
+    return DashboardOverview(
+      session: widget.session,
+      dashboard: widget.dashboard,
       onRefresh: widget.onRefresh,
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-        children: [
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [
-                  Color(0xFF115E59),
-                  Color(0xFF0F766E),
-                  Color(0xFFCB6E17),
-                ],
-              ),
-              borderRadius: BorderRadius.circular(28),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  widget.session.name,
-                  style: theme.textTheme.headlineMedium?.copyWith(
-                    color: Colors.white,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  widget.session.email,
-                  style: theme.textTheme.bodyLarge?.copyWith(
-                    color: Colors.white70,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: visibleRoleLabels
-                      .map(
-                        (role) => Container(
-                          constraints: const BoxConstraints(maxWidth: 220),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 8,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                              color: Colors.white.withOpacity(0.85),
-                            ),
-                          ),
-                          child: Text(
-                            role,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.labelLarge?.copyWith(
-                              color: const Color(0xFF115E59),
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ),
-                      )
-                      .toList(),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-          Text(_t('overview'), style: theme.textTheme.titleLarge),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: cards.map((card) => SummaryCard(card: card)).toList(),
-          ),
-          const SizedBox(height: 20),
-          if (widget.dashboard == null)
-            _buildPanel(
-              child: Text(
-                'This account authenticated successfully, but the school dashboard endpoint is not available for the current role.',
-                style: theme.textTheme.bodyLarge,
-              ),
-            )
-          else ...[
-            _buildPanel(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Revenue this month',
-                    style: theme.textTheme.titleLarge,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    widget.dashboard!.revenueLabel,
-                    style: theme.textTheme.headlineMedium,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Growth: ${widget.dashboard!.growthLabel}',
-                    style: theme.textTheme.bodyMedium,
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            _buildPanel(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(_t('monthly_revenue', 'Monthly revenue'),
-                      style: theme.textTheme.titleLarge),
-                  const SizedBox(height: 12),
-                  ...widget.dashboard!.monthTotals.map(
-                    (entry) => Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: Row(
-                        children: [
-                          Expanded(child: Text(entry.label)),
-                          Text(entry.totalLabel),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ],
-      ),
+      onStudents: _canViewStudents
+          ? () => _openScreen(StudentListScreen(
+                session: widget.session,
+                api: widget.api,
+                token: widget.session.token,
+              ))
+          : null,
+      onTeachers: _canViewTeachers
+          ? () => _openScreen(TeachersScreen(
+                session: widget.session,
+                api: widget.api,
+                token: widget.session.token,
+              ))
+          : null,
+      onSubjects: _canViewSubjects
+          ? () => _openScreen(SubjectsScreen(
+                session: widget.session,
+                api: widget.api,
+                token: widget.session.token,
+              ))
+          : null,
+      onAttendance: _canTakeMainAttendance
+          ? () => _openScreen(MainAttendanceScreen(
+                api: widget.api,
+                token: widget.session.token,
+              ))
+          : null,
     );
   }
 
@@ -1937,6 +1819,8 @@ class _HomeScreenState extends State<HomeScreen> {
           bottomNavigationBar: useRail
               ? null
               : NavigationBar(
+                  backgroundColor: Colors.white,
+                  indicatorColor: const Color(0xFFE88724),
                   selectedIndex:
                       hasMoreDestinations ? mobileSelectedIndex : selectedIndex,
                   onDestinationSelected: (index) {
@@ -1966,7 +1850,8 @@ class _HomeScreenState extends State<HomeScreen> {
                           ))
                       NavigationDestination(
                         icon: Icon(destinations[index].icon),
-                        selectedIcon: Icon(destinations[index].selectedIcon),
+                        selectedIcon: Icon(destinations[index].selectedIcon,
+                            color: Colors.white),
                         label: destinations[index].label,
                       ),
                     if (hasMoreDestinations)
