@@ -639,6 +639,7 @@ class _FeeInvoicesScreenState extends State<FeeInvoicesScreen> {
 
   Widget _buildInvoiceCard(FeeInvoiceListItem invoice) {
     final phone = invoice.student?.phone?.trim();
+    final className = invoice.studentAcademicYear?.className?.trim();
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
@@ -701,41 +702,85 @@ class _FeeInvoicesScreenState extends State<FeeInvoicesScreen> {
                         ),
                       ),
                       if (phone != null && phone.isNotEmpty)
-                        InkWell(
-                          onTap: () => _callStudent(phone),
-                          borderRadius: BorderRadius.circular(6),
-                          child: Padding(
-                            padding: const EdgeInsets.only(top: 3, bottom: 2),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(
-                                  Icons.call,
-                                  size: 15,
-                                  color: Color(0xFF0F766E),
-                                ),
-                                const SizedBox(width: 6),
-                                Flexible(
-                                  child: Text(
-                                    phone,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      fontSize: 13,
-                                      color: Color(0xFF0F766E),
-                                      decoration: TextDecoration.underline,
-                                    ),
+                        Padding(
+                          padding: const EdgeInsets.only(top: 3, bottom: 2),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.call,
+                                size: 15,
+                                color: Color(0xFF0F766E),
+                              ),
+                              const SizedBox(width: 6),
+                              Flexible(
+                                child: Text(
+                                  phone,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    color: Color(0xFF52606D),
+                                    decoration: TextDecoration.none,
                                   ),
                                 ),
-                              ],
-                            ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      if (className != null && className.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.class_outlined,
+                                size: 15,
+                                color: Color(0xFF52606D),
+                              ),
+                              const SizedBox(width: 6),
+                              Flexible(
+                                child: Text(
+                                  'Class: $className',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: Color(0xFF52606D),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                     ],
                   ),
                 ),
                 const SizedBox(width: 8),
-                _InvoiceStatusBadge(status: invoice.status),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    _InvoiceStatusBadge(status: invoice.status),
+                    if (phone != null && phone.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      IconButton(
+                        onPressed: () => _callStudent(phone),
+                        tooltip: 'Call $phone',
+                        style: IconButton.styleFrom(
+                          foregroundColor: const Color(0xFF0F766E),
+                          backgroundColor: const Color(0xFFE4F7F4),
+                          minimumSize: const Size(48, 48),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                        icon:
+                            const Icon(Icons.phone_in_talk_outlined, size: 22),
+                      ),
+                    ],
+                  ],
+                ),
               ],
             ),
             const SizedBox(height: 14),

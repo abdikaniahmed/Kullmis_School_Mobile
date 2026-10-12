@@ -141,6 +141,7 @@ class FeeInvoiceListItem {
     required this.status,
     required this.remarks,
     required this.student,
+    this.studentAcademicYear,
     required this.createdAt,
   });
 
@@ -154,6 +155,7 @@ class FeeInvoiceListItem {
   final String status;
   final String? remarks;
   final FeeInvoiceStudentSummary? student;
+  final FeeInvoiceStudentAcademicYear? studentAcademicYear;
   final String? createdAt;
 
   factory FeeInvoiceListItem.fromJson(Map<String, dynamic> json) {
@@ -168,6 +170,9 @@ class FeeInvoiceListItem {
       status: '${json['status'] ?? ''}'.trim(),
       remarks: _toNullableString(json['remarks']),
       student: FeeInvoiceStudentSummary.fromDynamic(json['student']),
+      studentAcademicYear: FeeInvoiceStudentAcademicYear.fromDynamic(
+        json['studentAcademicYear'] ?? json['student_academic_year'],
+      ),
       createdAt: _toNullableString(json['created_at']),
     );
   }
@@ -184,6 +189,7 @@ class FeeInvoiceListItem {
       'status': status,
       'remarks': remarks,
       'student': student?.toJson(),
+      'studentAcademicYear': studentAcademicYear?.toJson(),
       'created_at': createdAt,
     };
   }
@@ -274,7 +280,7 @@ class FeeInvoiceDetail {
       student: FeeInvoiceStudentSummary.fromDynamic(json['student']),
       school: FeeInvoiceSchoolSummary.fromDynamic(json['school']),
       studentAcademicYear: FeeInvoiceStudentAcademicYear.fromDynamic(
-        json['studentAcademicYear'],
+        json['studentAcademicYear'] ?? json['student_academic_year'],
       ),
       items: (json['items'] as List<dynamic>? ?? const [])
           .whereType<Map<String, dynamic>>()
@@ -362,7 +368,7 @@ class FeeInvoiceStudentAcademicYear {
     }
 
     final level = value['level'];
-    final schoolClass = value['schoolClass'];
+    final schoolClass = value['schoolClass'] ?? value['school_class'];
 
     return FeeInvoiceStudentAcademicYear(
       rollNumber: _toNullableString(value['roll_number']),
