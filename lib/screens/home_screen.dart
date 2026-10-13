@@ -224,6 +224,7 @@ class _HomeScreenState extends State<HomeScreen> {
         icon: Icons.groups_outlined,
         selectedIcon: Icons.groups,
         builder: _buildStudentsPage,
+        showMobileModuleBar: false,
         showChildren: true,
         sidebarChildren: _studentSidebarLinks(),
       ),
@@ -232,6 +233,7 @@ class _HomeScreenState extends State<HomeScreen> {
         icon: Icons.directions_bus_outlined,
         selectedIcon: Icons.directions_bus,
         builder: _buildTransportPage,
+        showMobileModuleBar: false,
         showChildren: true,
         sidebarChildren: _transportSidebarLinks(),
       ),
@@ -240,6 +242,7 @@ class _HomeScreenState extends State<HomeScreen> {
         icon: Icons.description_outlined,
         selectedIcon: Icons.description,
         builder: _buildReportsPage,
+        showMobileModuleBar: false,
         showChildren: true,
         sidebarChildren: _reportsSidebarLinks(),
       ),
@@ -248,6 +251,7 @@ class _HomeScreenState extends State<HomeScreen> {
         icon: Icons.how_to_reg_outlined,
         selectedIcon: Icons.how_to_reg,
         builder: _buildAttendancePage,
+        showMobileModuleBar: false,
         showChildren: true,
         sidebarChildren: _attendanceSidebarLinks(),
       ),
@@ -256,6 +260,7 @@ class _HomeScreenState extends State<HomeScreen> {
         icon: Icons.fact_check_outlined,
         selectedIcon: Icons.fact_check,
         builder: _buildSubjectAttendancePage,
+        showMobileModuleBar: false,
         showChildren: true,
         sidebarChildren: _subjectAttendanceSidebarLinks(),
       ),
@@ -264,6 +269,7 @@ class _HomeScreenState extends State<HomeScreen> {
         icon: Icons.school_outlined,
         selectedIcon: Icons.school,
         builder: _buildExamsPage,
+        showMobileModuleBar: false,
         showChildren: true,
         sidebarChildren: _examsSidebarLinks(),
       ),
@@ -272,6 +278,7 @@ class _HomeScreenState extends State<HomeScreen> {
         icon: Icons.request_quote_outlined,
         selectedIcon: Icons.request_quote,
         builder: _buildFeesPage,
+        showMobileModuleBar: false,
         showChildren: true,
         sidebarChildren: _financeSidebarLinks(),
       ),
@@ -280,6 +287,7 @@ class _HomeScreenState extends State<HomeScreen> {
         icon: Icons.badge_outlined,
         selectedIcon: Icons.badge,
         builder: _buildHrPage,
+        showMobileModuleBar: false,
         showChildren: true,
         sidebarChildren: _hrSidebarLinks(),
       ),
@@ -296,6 +304,7 @@ class _HomeScreenState extends State<HomeScreen> {
         icon: Icons.auto_stories_outlined,
         selectedIcon: Icons.auto_stories,
         builder: _buildAcademicPage,
+        showMobileModuleBar: false,
         showChildren: true,
         sidebarChildren: _academicSidebarLinks(),
       ),
@@ -1130,86 +1139,58 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildStudentsPage() {
-    return _buildOverviewPage(
-      title: _t('students'),
-      description:
-          'Open the student roster and drill into profiles from one place.',
-      modules: _studentSidebarLinks().map((link) => link.label).toList(),
+    return _buildModuleGridPage(
+      title: _t('student_management', 'Student Management'),
+      modules: _studentSidebarLinks(),
     );
   }
 
   Widget _buildAttendancePage() {
-    return _buildOverviewPage(
-      title: _t('attendance'),
-      description: _t(
-        'open_attendance_tools',
-        'Open the attendance tools that match the signed-in role.',
-      ),
-      modules: _attendanceSidebarLinks().map((link) => link.label).toList(),
+    return _buildModuleGridPage(
+      title: _t('attendance_management', 'Attendance Management'),
+      modules: _attendanceSidebarLinks(),
     );
   }
 
   Widget _buildSubjectAttendancePage() {
-    return _buildOverviewPage(
-      title: _t('subject_attendance'),
-      description: _t(
-        'take_subject_attendance_review_reports',
-        'Take subject attendance and review subject reports.',
-      ),
-      modules:
-          _subjectAttendanceSidebarLinks().map((link) => link.label).toList(),
+    return _buildModuleGridPage(
+      title: _t('subject_attendance_management', 'Subject Attendance'),
+      modules: _subjectAttendanceSidebarLinks(),
     );
   }
 
   Widget _buildReportsPage() {
-    return _buildOverviewPage(
+    return _buildModuleGridPage(
       title: _t('reports'),
-      description: _t('open_exam_reports', 'Open exam reports and summaries.'),
-      modules: _reportsSidebarLinks().map((link) => link.label).toList(),
+      modules: _reportsSidebarLinks(),
     );
   }
 
   Widget _buildExamsPage() {
-    return _buildOverviewPage(
-      title: _t('exams'),
-      description:
-          _t('manage_exams_marks_reports', 'Manage exams, marks, and reports.'),
-      modules: _examsSidebarLinks().map((link) => link.label).toList(),
+    return _buildModuleGridPage(
+      title: _t('exams_management', 'Exams Management'),
+      modules: _examsSidebarLinks(),
     );
   }
 
   Widget _buildHrPage() {
-    return _buildOverviewPage(
-      title: _t('hr', 'HR'),
-      description: _t(
-        'manage_hr_modules',
-        'Manage staff, teachers, documents, users, and roles.',
-      ),
-      modules: _hrSidebarLinks().map((link) => link.label).toList(),
+    return _buildModuleGridPage(
+      title: _t('hr_management', 'HR Management'),
+      modules: _hrSidebarLinks(),
     );
   }
 
   Widget _buildAcademicPage() {
-    return _buildOverviewPage(
-      title: _t('academic'),
-      description:
-          _t('academic_tools_planning', 'Academic tools and planning modules.'),
-      modules: _academicSidebarLinks().map((link) => link.label).toList(),
-      emptyMessage: _t(
-        'academic_tools_enabled_for_role',
-        'Academic tools will appear here once they are enabled for your role.',
-      ),
+    return _buildModuleGridPage(
+      title: _t('academic_management', 'Academic Management'),
+      modules: _academicSidebarLinks(),
     );
   }
 
   Widget _buildFeesPage() {
-    return _buildOverviewPage(
-      title: _t('fees'),
-      description: _t(
-        'manage_school_billing',
-        'Manage school billing, invoices, and payment workflows.',
-      ),
-      modules: _financeSidebarLinks().map((link) => link.label).toList(),
+    return _buildModuleGridPage(
+      title: _t('finance_management', 'Finance Management'),
+      modules: _financeSidebarLinks(),
     );
   }
 
@@ -1315,6 +1296,102 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(height: 16),
           footer,
         ],
+      ],
+    );
+  }
+
+  Widget _buildModuleGridPage({
+    required String title,
+    required List<_SidebarChildLink> modules,
+  }) {
+    final theme = Theme.of(context);
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+      children: [
+        _buildPanel(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: theme.textTheme.titleLarge),
+              if (modules.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: modules.length,
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    crossAxisSpacing: 12,
+                    mainAxisSpacing: 12,
+                    mainAxisExtent: 104,
+                  ),
+                  itemBuilder: (context, index) {
+                    final module = modules[index];
+                    return Material(
+                      color: const Color(0xFFF5FAF9),
+                      borderRadius: BorderRadius.circular(16),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(16),
+                        onTap: () async => module.onPressed(),
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: theme.colorScheme.primary
+                                  .withValues(alpha: 0.12),
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(
+                                    module.icon,
+                                    color: theme.colorScheme.primary,
+                                    size: 22,
+                                  ),
+                                  const Spacer(),
+                                  Icon(
+                                    Icons.chevron_right,
+                                    color: theme.colorScheme.primary
+                                        .withValues(alpha: 0.7),
+                                    size: 20,
+                                  ),
+                                ],
+                              ),
+                              Text(
+                                module.label,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  color: theme.colorScheme.onSurface,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ] else ...[
+                const SizedBox(height: 8),
+                Text(
+                  _t(
+                    'no_modules_available',
+                    'No modules are available for this account.',
+                  ),
+                  style: theme.textTheme.bodyMedium,
+                ),
+              ],
+            ],
+          ),
+        ),
       ],
     );
   }
@@ -1466,17 +1543,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildTransportPage() {
-    return _buildOverviewPage(
-      title: _t('transport'),
-      description: _t(
-        'manage_transport_coverage',
-        'Manage buses, assign students, and track transport coverage across the school.',
-      ),
-      modules: _transportSidebarLinks().map((link) => link.label).toList(),
-      emptyMessage: _t(
-        'no_transport_modules_available',
-        'No transport modules are available for this account yet.',
-      ),
+    return _buildModuleGridPage(
+      title: _t('transport_management', 'Transport Management'),
+      modules: _transportSidebarLinks(),
     );
   }
 
@@ -1484,7 +1553,8 @@ class _HomeScreenState extends State<HomeScreen> {
     ThemeData theme,
     _ShellDestination destination,
   ) {
-    if (destination.sidebarChildren.isEmpty) {
+    if (!destination.showMobileModuleBar ||
+        destination.sidebarChildren.isEmpty) {
       return const SizedBox.shrink();
     }
 
@@ -2346,6 +2416,7 @@ class _ShellDestination {
     required this.builder,
     this.sidebarChildren = const [],
     this.showChildren = false,
+    this.showMobileModuleBar = true,
   });
 
   final String label;
@@ -2354,6 +2425,7 @@ class _ShellDestination {
   final Widget Function() builder;
   final List<_SidebarChildLink> sidebarChildren;
   final bool showChildren;
+  final bool showMobileModuleBar;
 }
 
 class _SidebarChildLink {
