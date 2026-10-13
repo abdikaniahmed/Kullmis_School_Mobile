@@ -165,97 +165,100 @@ class DashboardOverview extends StatelessWidget {
                 child:
                     Text('Dashboard data is not available for this account.'))
           else ...[
-            _Panel(
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                  Row(children: [
-                    const _TileIcon(icon: Icons.savings_outlined),
-                    const SizedBox(width: 10),
-                    const Expanded(
-                        child: Text('Revenue this month',
-                            style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w700,
-                                color: _ink))),
-                    const SizedBox(width: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 6),
-                      decoration: BoxDecoration(
-                          color: data.revenueGrowthPercent < 0
-                              ? const Color(0xFFFFEEF3)
-                              : const Color(0xFFE4F6EF),
-                          borderRadius: BorderRadius.circular(20)),
-                      child: Text(
-                          '${data.revenueGrowthPercent < 0 ? '\u2198' : '\u2197'} ${data.growthLabel}',
-                          style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              color: data.revenueGrowthPercent < 0
-                                  ? const Color(0xFFB4134A)
-                                  : _teal)),
-                    ),
-                  ]),
-                  const SizedBox(height: 14),
-                  Text(_money(data.revenueTotal),
-                      style: const TextStyle(
-                          color: _teal,
-                          fontSize: 32,
-                          fontWeight: FontWeight.w800)),
-                  const SizedBox(height: 5),
-                  const Text('Total income this month',
-                      style: TextStyle(color: _muted, fontSize: 13)),
-                ])),
-            const SizedBox(height: 14),
-            _Panel(
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                  Row(children: [
-                    const _TileIcon(icon: Icons.bar_chart),
-                    const SizedBox(width: 10),
-                    Expanded(
+            if (session.hasPermission('dashboard.summary.view')) ...[
+              _Panel(
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                    Row(children: [
+                      const _TileIcon(icon: Icons.savings_outlined),
+                      const SizedBox(width: 10),
+                      const Expanded(
+                          child: Text('Revenue this month',
+                              style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                  color: _ink))),
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 6),
+                        decoration: BoxDecoration(
+                            color: data.revenueGrowthPercent < 0
+                                ? const Color(0xFFFFEEF3)
+                                : const Color(0xFFE4F6EF),
+                            borderRadius: BorderRadius.circular(20)),
                         child: Text(
-                            context.tr('monthly_revenue', 'Monthly Revenue'),
-                            style: const TextStyle(
-                                fontSize: 16,
+                            '${data.revenueGrowthPercent < 0 ? '\u2198' : '\u2197'} ${data.growthLabel}',
+                            style: TextStyle(
+                                fontSize: 11,
                                 fontWeight: FontWeight.w700,
-                                color: _ink))),
-                  ]),
-                  const SizedBox(height: 18),
-                  if (data.monthTotals.isEmpty)
-                    const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 24),
-                        child: Text('No monthly revenue data available.'))
-                  else ...[
-                    _RevenueChart(months: data.monthTotals),
-                    const SizedBox(height: 16),
-                    LayoutBuilder(builder: (context, constraints) {
-                      final highest = data.monthTotals
-                          .reduce((a, b) => a.total >= b.total ? a : b);
-                      final lowest = data.monthTotals
-                          .reduce((a, b) => a.total <= b.total ? a : b);
-                      final width = constraints.maxWidth < 290
-                          ? constraints.maxWidth
-                          : (constraints.maxWidth - 10) / 2;
-                      return Wrap(spacing: 10, runSpacing: 10, children: [
-                        SizedBox(
-                            width: width,
-                            child: _ExtremeMonth(
-                                label: 'Highest Month',
-                                month: highest,
-                                highest: true)),
-                        SizedBox(
-                            width: width,
-                            child: _ExtremeMonth(
-                                label: 'Lowest Month',
-                                month: lowest,
-                                highest: false)),
-                      ]);
-                    }),
-                  ],
-                ])),
+                                color: data.revenueGrowthPercent < 0
+                                    ? const Color(0xFFB4134A)
+                                    : _teal)),
+                      ),
+                    ]),
+                    const SizedBox(height: 14),
+                    Text(_money(data.revenueTotal),
+                        style: const TextStyle(
+                            color: _teal,
+                            fontSize: 32,
+                            fontWeight: FontWeight.w800)),
+                    const SizedBox(height: 5),
+                    const Text('Total income this month',
+                        style: TextStyle(color: _muted, fontSize: 13)),
+                  ])),
+              const SizedBox(height: 14),
+            ],
+            if (session.hasPermission('dashboard.finance_charts.view'))
+              _Panel(
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                    Row(children: [
+                      const _TileIcon(icon: Icons.bar_chart),
+                      const SizedBox(width: 10),
+                      Expanded(
+                          child: Text(
+                              context.tr('monthly_revenue', 'Monthly Revenue'),
+                              style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                  color: _ink))),
+                    ]),
+                    const SizedBox(height: 18),
+                    if (data.monthTotals.isEmpty)
+                      const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 24),
+                          child: Text('No monthly revenue data available.'))
+                    else ...[
+                      _RevenueChart(months: data.monthTotals),
+                      const SizedBox(height: 16),
+                      LayoutBuilder(builder: (context, constraints) {
+                        final highest = data.monthTotals
+                            .reduce((a, b) => a.total >= b.total ? a : b);
+                        final lowest = data.monthTotals
+                            .reduce((a, b) => a.total <= b.total ? a : b);
+                        final width = constraints.maxWidth < 290
+                            ? constraints.maxWidth
+                            : (constraints.maxWidth - 10) / 2;
+                        return Wrap(spacing: 10, runSpacing: 10, children: [
+                          SizedBox(
+                              width: width,
+                              child: _ExtremeMonth(
+                                  label: 'Highest Month',
+                                  month: highest,
+                                  highest: true)),
+                          SizedBox(
+                              width: width,
+                              child: _ExtremeMonth(
+                                  label: 'Lowest Month',
+                                  month: lowest,
+                                  highest: false)),
+                        ]);
+                      }),
+                    ],
+                  ])),
           ],
         ],
       ),

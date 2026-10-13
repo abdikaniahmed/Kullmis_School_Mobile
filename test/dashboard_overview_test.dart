@@ -11,7 +11,7 @@ void main() {
       name: 'School Admin',
       email: 'admin@school.test',
       roles: ['school_admin'],
-      permissions: [],
+      permissions: ['dashboard.summary.view', 'dashboard.finance_charts.view'],
       schoolName: 'Almanaar Secondary School');
   const data = DashboardData(
       students: 411,
@@ -29,6 +29,62 @@ void main() {
         MonthlyTotal(label: 'Sep', total: 0),
         MonthlyTotal(label: 'Oct', total: 5671.50),
       ]);
+
+  for (final permissions in <List<String>>[
+    [],
+    ['fees.view'],
+    ['dashboard.summary.view'],
+    ['dashboard.finance_charts.view'],
+  ]) {
+    testWidgets('revenue visibility follows permissions $permissions',
+        (tester) async {
+      tester.view.physicalSize = const Size(800, 2400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final language = AppLanguageController();
+      addTearDown(language.dispose);
+      await tester.pumpWidget(AppLanguageScope(
+        controller: language,
+        child: MaterialApp(
+          home: Scaffold(
+            body: DashboardOverview(
+              session: AuthSession(
+                token: '',
+                name: 'User',
+                email: 'user@school.test',
+                roles: ['school_admin'],
+                permissions: permissions,
+              ),
+              dashboard: data,
+              onRefresh: () async {},
+            ),
+          ),
+        ),
+      ));
+      expect(find.text('411'), findsOneWidget);
+      expect(
+          find.text('Revenue this month'),
+          permissions.contains('dashboard.summary.view')
+              ? findsOneWidget
+              : findsNothing);
+      expect(
+          find.text('Highest Month'),
+          permissions.contains('dashboard.finance_charts.view')
+              ? findsOneWidget
+              : findsNothing);
+      expect(
+          find.text('Lowest Month'),
+          permissions.contains('dashboard.finance_charts.view')
+              ? findsOneWidget
+              : findsNothing);
+      if (!permissions.contains('dashboard.summary.view') &&
+          !permissions.contains('dashboard.finance_charts.view')) {
+        expect(find.textContaining(r'$'), findsNothing);
+      }
+      expect(tester.takeException(), isNull);
+    });
+  }
 
   for (final width in [320.0, 390.0, 800.0]) {
     testWidgets('dashboard fits $width and opens student list', (tester) async {
