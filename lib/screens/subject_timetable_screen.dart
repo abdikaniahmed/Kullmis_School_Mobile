@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../models/main_attendance_models.dart';
 import '../models/school_reports_models.dart';
 import '../models/subject_attendance_models.dart';
 import '../services/laravel_api.dart';
@@ -267,7 +266,7 @@ class _SubjectTimetableScreenState extends State<SubjectTimetableScreen> {
       });
 
       await _loadTimetable();
-    } on ApiException catch (error) {
+    } on ApiException {
       await _queueOfflineDraft(
         classId: classId,
         timetable: timetable,
@@ -483,7 +482,7 @@ class _SubjectTimetableScreenState extends State<SubjectTimetableScreen> {
                         Text('Timetable Filters', style: theme.textTheme.titleLarge),
                         const SizedBox(height: 16),
                         DropdownButtonFormField<int>(
-                          value: _selectedClassId,
+                          initialValue: _selectedClassId,
                           decoration: const InputDecoration(labelText: 'Class'),
                           items: (_filters?.classes ?? const <AttendanceClass>[])
                               .map(
@@ -503,7 +502,7 @@ class _SubjectTimetableScreenState extends State<SubjectTimetableScreen> {
                         ),
                         const SizedBox(height: 12),
                         DropdownButtonFormField<int>(
-                          value: _selectedDay,
+                          initialValue: _selectedDay,
                           decoration: const InputDecoration(labelText: 'Day'),
                           items: _weekdays.entries
                               .map(
@@ -579,7 +578,7 @@ class _SubjectTimetableScreenState extends State<SubjectTimetableScreen> {
                               const SizedBox(height: 10),
                               if (widget.canEdit)
                                 DropdownButtonFormField<int?>(
-                                  value: _selectedAssignments[period.value],
+                                  initialValue: _selectedAssignments[period.value],
                                   decoration: const InputDecoration(
                                     labelText: 'Assignment',
                                   ),
