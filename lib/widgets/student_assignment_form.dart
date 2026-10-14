@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'student_edit_design.dart';
 
 import '../models/fee_models.dart';
 import '../models/main_attendance_models.dart';
@@ -11,11 +12,15 @@ class StudentAssignmentForm extends StatefulWidget {
     required this.api,
     required this.token,
     required this.studentId,
+    this.editDesign = false,
+    this.onBack,
   });
 
   final LaravelApi api;
   final String token;
   final int studentId;
+  final bool editDesign;
+  final VoidCallback? onBack;
 
   @override
   State<StudentAssignmentForm> createState() => _StudentAssignmentFormState();
@@ -38,6 +43,7 @@ class _StudentAssignmentFormState extends State<StudentAssignmentForm> {
   bool _feesLoading = false;
   bool _feesSaving = false;
   String? _error;
+  String? _status;
 
   @override
   void initState() {
@@ -184,6 +190,7 @@ class _StudentAssignmentFormState extends State<StudentAssignmentForm> {
     setState(() {
       _saving = true;
       _error = null;
+      _status = null;
     });
 
     try {
@@ -209,8 +216,6 @@ class _StudentAssignmentFormState extends State<StudentAssignmentForm> {
           _assignmentId = assignment.id;
           _saving = false;
         });
-
-        await _loadOptionalFees();
       } else {
         await widget.api.updateStudentAssignment(
           token: widget.token,
@@ -233,7 +238,11 @@ class _StudentAssignmentFormState extends State<StudentAssignmentForm> {
         });
       }
 
-      if (mounted) {
+      await _loadOptionalFees();
+      if (mounted && widget.editDesign) {
+        setState(() => _status = 'Assignment saved.');
+      }
+      if (mounted && !widget.editDesign) {
         ScaffoldMessenger.of(context)
           ..hideCurrentSnackBar()
           ..showSnackBar(
@@ -269,6 +278,7 @@ class _StudentAssignmentFormState extends State<StudentAssignmentForm> {
 
     setState(() {
       _feesSaving = true;
+      _status = null;
     });
 
     try {
@@ -286,7 +296,10 @@ class _StudentAssignmentFormState extends State<StudentAssignmentForm> {
         _feesSaving = false;
       });
 
-      if (mounted) {
+      if (mounted && widget.editDesign) {
+        setState(() => _status = 'Optional fees updated.');
+      }
+      if (mounted && !widget.editDesign) {
         ScaffoldMessenger.of(context)
           ..hideCurrentSnackBar()
           ..showSnackBar(
@@ -322,6 +335,8 @@ class _StudentAssignmentFormState extends State<StudentAssignmentForm> {
       return const Center(child: CircularProgressIndicator());
     }
 
+    if (widget.editDesign) return _editForm();
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -334,7 +349,7 @@ class _StudentAssignmentFormState extends State<StudentAssignmentForm> {
           Text('Academic Assignment', style: theme.textTheme.titleLarge),
           const SizedBox(height: 16),
           DropdownButtonFormField<int>(
-            value: _academicYearId,
+            initialValue: _academicYearId,
             decoration: const InputDecoration(
               labelText: 'Academic Year',
               border: OutlineInputBorder(),
@@ -355,7 +370,7 @@ class _StudentAssignmentFormState extends State<StudentAssignmentForm> {
           ),
           const SizedBox(height: 14),
           DropdownButtonFormField<int>(
-            value: _levelId,
+            initialValue: _levelId,
             decoration: const InputDecoration(
               labelText: 'Level',
               border: OutlineInputBorder(),
@@ -377,7 +392,7 @@ class _StudentAssignmentFormState extends State<StudentAssignmentForm> {
           ),
           const SizedBox(height: 14),
           DropdownButtonFormField<int>(
-            value: _classId,
+            initialValue: _classId,
             decoration: const InputDecoration(
               labelText: 'Class',
               border: OutlineInputBorder(),
@@ -484,5 +499,169 @@ class _StudentAssignmentFormState extends State<StudentAssignmentForm> {
         ],
       ),
     );
+  }
+
+  Widget _editForm() {
+    Widget select(String label, IconData icon, int? value,
+            Map<int, String> options, ValueChanged<int?> onChanged,
+            {bool enabled = true}) =>
+        StudentField(
+            label: label,
+            icon: icon,
+            required: true,
+            child: DropdownButtonFormField<int>(
+                initialValue: options.containsKey(value) ? value : null,
+                isExpanded: true,
+                decoration: studentInput(),
+                items: options.entries
+                    .map((e) => DropdownMenuItem(
+                        value: e.key,
+                        child: Text(e.value, overflow: TextOverflow.ellipsis)))
+                    .toList(),
+                onChanged: enabled && !_saving ? onChanged : null));
+    final level = select(
+        'Level',
+        Icons.bar_chart,
+        _levelId,
+        {for (final l in _levels) l.id: l.name},
+        (v) => setState(() {
+              _levelId = v;
+              _classId = null;
+            }));
+    final classroom = select(
+        'Class',
+        Icons.groups,
+        _classId,
+        {for (final c in _filteredClasses) c.id: c.name},
+        (v) => setState(() => _classId = v));
+    return Column(children: [
+      Expanded(
+          child: ListView(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+              children: [
+            StudentSection(
+                title: 'Academic Assignment',
+                subtitle:
+                    'Assign the student to academic year, level and class.',
+                icon: Icons.menu_book,
+                children: [
+                  select(
+                      'Academic Year',
+                      Icons.calendar_month,
+                      _academicYearId,
+                      {for (final y in _years) y.id: y.name},
+                      (v) => setState(() => _academicYearId = v),
+                      enabled: _assignmentId == null),
+                  LayoutBuilder(
+                      builder: (context, constraints) =>
+                          constraints.maxWidth < 420
+                              ? Column(children: [level, classroom])
+                              : Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                      Expanded(child: level),
+                                      const SizedBox(width: 16),
+                                      Expanded(child: classroom)
+                                    ])),
+                  StudentField(
+                      label: 'Roll Number',
+                      icon: Icons.tag,
+                      child: TextField(
+                          controller: _rollNumberController,
+                          decoration: studentInput(
+                              hint: 'Leave blank to auto-generate'))),
+                  if (_error != null)
+                    Text(_error!,
+                        style: const TextStyle(color: Color(0xFFB42318))),
+                ]),
+            const SizedBox(height: 18),
+            StudentSection(
+                title: 'Optional Fees',
+                subtitle:
+                    'Assign class specific optional fees for this student.',
+                icon: Icons.storage,
+                children: [
+                  if (_feesLoading)
+                    const Center(child: CircularProgressIndicator())
+                  else if (_optionalFees.isEmpty)
+                    Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                            color: const Color(0xFFE8F3FF),
+                            borderRadius: BorderRadius.circular(8)),
+                        child: Row(children: [
+                          const Icon(Icons.info, color: Color(0xFF2284E8)),
+                          const SizedBox(width: 12),
+                          Expanded(
+                              child: Text(
+                                  _assignmentId == null
+                                      ? 'Save an assignment to load optional fees.'
+                                      : 'No optional fees available for this class.',
+                                  style: const TextStyle(
+                                      color: Color(0xFF2275CC),
+                                      fontWeight: FontWeight.w600)))
+                        ]))
+                  else
+                    Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: _optionalFees
+                            .map((fee) => FilterChip(
+                                label: Text(fee.name),
+                                selected:
+                                    _selectedOptionalFeeIds.contains(fee.id),
+                                onSelected: _feesSaving
+                                    ? null
+                                    : (selected) => setState(() {
+                                          _selectedOptionalFeeIds = selected
+                                              ? [
+                                                  ..._selectedOptionalFeeIds,
+                                                  fee.id
+                                                ]
+                                              : _selectedOptionalFeeIds
+                                                  .where((id) => id != fee.id)
+                                                  .toList();
+                                        })))
+                            .toList()),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                          onPressed: _assignmentId == null ||
+                                  _feesSaving ||
+                                  _feesLoading ||
+                                  _saving
+                              ? null
+                              : _saveOptionalFees,
+                          icon: _feesSaving
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child:
+                                      CircularProgressIndicator(strokeWidth: 2))
+                              : const Icon(Icons.add),
+                          label: const Text('Save Optional Fees'),
+                          style: OutlinedButton.styleFrom(
+                              foregroundColor: studentTeal,
+                              side: const BorderSide(
+                                  color: studentTeal, width: 1.5),
+                              minimumSize: const Size(0, 48),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8))))),
+                ]),
+          ])),
+      if (_status != null)
+        Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Text(_status!,
+                style: const TextStyle(
+                    color: studentTeal, fontWeight: FontWeight.w600))),
+      StudentFooter(
+          backLabel: 'Back to Profile',
+          nextLabel: 'Save Assignment',
+          onBack: widget.onBack,
+          onNext: _feesSaving ? null : _saveAssignment,
+          busy: _saving),
+    ]);
   }
 }

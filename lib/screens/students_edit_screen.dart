@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../models/auth_session.dart';
+import '../models/student_management_models.dart';
+import '../widgets/student_edit_design.dart';
 import '../services/laravel_api.dart';
 import '../widgets/student_assignment_form.dart';
 import '../widgets/student_profile_form.dart';
@@ -31,6 +33,7 @@ class _StudentsEditScreenState extends State<StudentsEditScreen> {
   final _busAssignController = TextEditingController();
   final _bloodTypeController = TextEditingController();
 
+  StudentProfile? _student;
   int _step = 0;
   String? _gender;
   String? _studentType;
@@ -73,6 +76,7 @@ class _StudentsEditScreenState extends State<StudentsEditScreen> {
       }
 
       setState(() {
+        _student = student;
         _nameController.text = student.name;
         _phoneController.text = student.phone ?? '';
         _secondPhoneController.text = student.secondPhone ?? '';
@@ -106,6 +110,7 @@ class _StudentsEditScreenState extends State<StudentsEditScreen> {
   }
 
   Future<void> _saveProfile() async {
+    FocusScope.of(context).unfocus();
     final name = _nameController.text.trim();
     if (name.isEmpty) {
       setState(() {
@@ -152,11 +157,10 @@ class _StudentsEditScreenState extends State<StudentsEditScreen> {
 
       setState(() {
         _saving = false;
+        _step = 1;
       });
 
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(const SnackBar(content: Text('Profile updated.')));
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
     } on ApiException catch (error) {
       if (!mounted) {
         return;
@@ -178,119 +182,186 @@ class _StudentsEditScreenState extends State<StudentsEditScreen> {
     }
   }
 
+  void _resetProfile() {
+    final student = _student;
+    if (student == null) return;
+    setState(() {
+      _nameController.text = student.name;
+      _phoneController.text = student.phone ?? '';
+      _secondPhoneController.text = student.secondPhone ?? '';
+      _addressController.text = student.address ?? '';
+      _busAssignController.text = student.busAssign ?? '';
+      _bloodTypeController.text = student.bloodType ?? '';
+      _gender = student.gender;
+      _studentType = student.studentType ?? 'normal';
+      _feeType = student.feeType ?? 'normal';
+      _error = null;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
-
     return Scaffold(
-      appBar: AppBar(title: const Text('Edit Student')),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-        children: [
-          _StepHeader(step: _step),
-          const SizedBox(height: 16),
-          if (_step == 0)
-            StudentProfileForm(
-              nameController: _nameController,
-              phoneController: _phoneController,
-              secondPhoneController: _secondPhoneController,
-              addressController: _addressController,
-              busAssignController: _busAssignController,
-              bloodTypeController: _bloodTypeController,
-              gender: _gender,
-              studentType: _studentType,
-              feeType: _feeType,
-              onGenderChanged: (value) => setState(() => _gender = value),
-              onStudentTypeChanged: (value) =>
-                  setState(() => _studentType = value),
-              onFeeTypeChanged: (value) => setState(() => _feeType = value),
-              onSubmit: _saveProfile,
-              submitLabel: 'Update Profile',
-              loading: _saving,
-            )
-          else
-            StudentAssignmentForm(
-              api: widget.api,
-              token: widget.token,
-              studentId: widget.studentId,
-            ),
-          if (_error != null) ...[
-            const SizedBox(height: 12),
-            Text(
-              _error!,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: const Color(0xFFB42318),
-                  ),
-            ),
-          ],
-        ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          setState(() {
-            _step = _step == 0 ? 1 : 0;
-          });
-        },
-        label: Text(_step == 0 ? 'Academic Assignment' : 'Profile'),
-        icon: const Icon(Icons.swap_horiz),
-      ),
+      backgroundColor: const Color(0xFFF7F5ED),
+      appBar: AppBar(
+          title: const Text('Edit Student',
+              style: TextStyle(color: studentInk, fontWeight: FontWeight.w700)),
+          backgroundColor: Colors.white,
+          foregroundColor: studentInk,
+          surfaceTintColor: Colors.transparent),
+      body: Center(
+          child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 720),
+              child: Column(children: [
+                if (MediaQuery.viewInsetsOf(context).bottom == 0) ...[
+                  Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                      child: Row(children: [
+                        Expanded(
+                            flex: 2,
+                            child: _stepChip(
+                                '1. Profile',
+                                _step == 1 ? Icons.check_circle : Icons.person,
+                                _step == 0)),
+                        Container(
+                            width: 20,
+                            height: 2,
+                            color: studentTeal.withValues(alpha: .3)),
+                        Expanded(
+                            flex: 3,
+                            child: _stepChip('2. Academic Assignment',
+                                Icons.menu_book, _step == 1)),
+                      ])),
+                  Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: _summary()),
+                  const SizedBox(height: 14),
+                ],
+                Expanded(
+                    child: _step == 0
+                        ? ListView(
+                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+                            children: [
+                                StudentProfileForm(
+                                    editDesign: true,
+                                    nameController: _nameController,
+                                    phoneController: _phoneController,
+                                    secondPhoneController:
+                                        _secondPhoneController,
+                                    addressController: _addressController,
+                                    busAssignController: _busAssignController,
+                                    bloodTypeController: _bloodTypeController,
+                                    gender: _gender,
+                                    studentType: _studentType,
+                                    feeType: _feeType,
+                                    onGenderChanged: (v) =>
+                                        setState(() => _gender = v),
+                                    onStudentTypeChanged: (v) =>
+                                        setState(() => _studentType = v),
+                                    onFeeTypeChanged: (v) =>
+                                        setState(() => _feeType = v),
+                                    onSubmit: _saveProfile,
+                                    submitLabel: 'Academic Assignment',
+                                    loading: _saving),
+                              ])
+                        : StudentAssignmentForm(
+                            api: widget.api,
+                            token: widget.token,
+                            studentId: widget.studentId,
+                            editDesign: true,
+                            onBack: () => setState(() => _step = 0))),
+                if (_step == 0 && _error != null)
+                  Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Text(_error!,
+                          style: const TextStyle(color: Color(0xFFB42318)))),
+                if (_step == 0 && _student == null)
+                  TextButton.icon(
+                      onPressed: _loadStudent,
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Retry')),
+                if (_step == 0)
+                  StudentFooter(
+                      backLabel: 'Reset',
+                      nextLabel: 'Academic Assignment',
+                      backIcon: Icons.refresh,
+                      nextIcon: Icons.arrow_forward,
+                      busy: _saving,
+                      onBack: _resetProfile,
+                      onNext: _student == null ? null : _saveProfile),
+              ]))),
     );
   }
-}
 
-class _StepHeader extends StatelessWidget {
-  const _StepHeader({
-    required this.step,
-  });
-
-  final int step;
-
-  @override
-  Widget build(BuildContext context) {
-    return Wrap(
-      spacing: 12,
-      runSpacing: 12,
-      children: [
-        _StepChip(label: '1. Profile', active: step == 0),
-        _StepChip(label: '2. Academic Assignment', active: step == 1),
-      ],
-    );
-  }
-}
-
-class _StepChip extends StatelessWidget {
-  const _StepChip({
-    required this.label,
-    required this.active,
-  });
-
-  final String label;
-  final bool active;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final background = active
-        ? theme.colorScheme.primary
-        : theme.colorScheme.primary.withOpacity(0.08);
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+  Widget _stepChip(String label, IconData icon, bool active) => Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
       decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: active ? Colors.white : theme.colorScheme.primary,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
-  }
+          color: active ? studentTeal : const Color(0xFFE7EEE7),
+          borderRadius: BorderRadius.circular(30)),
+      child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+        Icon(icon, size: 21, color: active ? Colors.white : studentTeal),
+        const SizedBox(width: 7),
+        Flexible(
+            child: Text(label,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: active ? Colors.white : studentTeal)))
+      ]));
+  Widget _summary() => Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+          color: const Color(0xFFE7F6F0),
+          border: Border.all(color: Colors.white, width: 2),
+          borderRadius: BorderRadius.circular(18)),
+      child: Row(children: [
+        Container(
+            width: 70,
+            height: 70,
+            decoration: BoxDecoration(
+                color: const Color(0xFFDCE6F4),
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white, width: 3)),
+            child:
+                const Icon(Icons.person, size: 52, color: Color(0xFF526178))),
+        const SizedBox(width: 14),
+        Expanded(
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(_nameController.text,
+              style: const TextStyle(
+                  fontSize: 19,
+                  fontWeight: FontWeight.w700,
+                  color: studentInk)),
+          const SizedBox(height: 4),
+          Text(_phoneController.text,
+              style: const TextStyle(color: Color(0xFF748094))),
+          const SizedBox(height: 10),
+          Wrap(spacing: 7, runSpacing: 6, children: [
+            if (_student?.currentYear?.rollNumber != null)
+              _badge(Icons.badge, _student!.currentYear!.rollNumber!),
+            if (_gender != null)
+              _badge(_gender == 'female' ? Icons.female : Icons.male,
+                  _gender == 'female' ? 'Female' : 'Male'),
+            _badge(Icons.school,
+                _studentType == 'boarding' ? 'Boarding' : 'Normal'),
+          ]),
+        ])),
+      ]));
+  Widget _badge(IconData icon, String label) => Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+      decoration: BoxDecoration(
+          color: const Color(0xFFD4EEE7),
+          borderRadius: BorderRadius.circular(12)),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(icon, size: 17, color: studentTeal),
+        const SizedBox(width: 5),
+        Text(label,
+            style: const TextStyle(
+                fontSize: 12, color: studentInk, fontWeight: FontWeight.w600))
+      ]));
 }
