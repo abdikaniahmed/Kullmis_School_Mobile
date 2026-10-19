@@ -385,7 +385,7 @@ class _ExamMarkEntryScreenState extends State<ExamMarkEntryScreen> {
       }
 
       final mark = double.tryParse(rawMark);
-      if (mark == null) {
+      if (mark == null || !mark.isFinite) {
         _showMessage('Enter a valid mark for ${student.name}.');
         return;
       }
@@ -657,15 +657,16 @@ class _ExamMarkEntryScreenState extends State<ExamMarkEntryScreen> {
       appBar: AppBar(
         title: const Text('Exam Mark Entry'),
       ),
+      bottomNavigationBar: _students.isEmpty ? null : _buildSaveBar(),
       body: RefreshIndicator(
         onRefresh: _loadSetup,
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
           children: [
             Container(
-              padding: const EdgeInsets.all(18),
+              padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: theme.colorScheme.surface,
                 borderRadius: BorderRadius.circular(20),
               ),
               child: _loadingSetup
@@ -713,137 +714,135 @@ class _ExamMarkEntryScreenState extends State<ExamMarkEntryScreen> {
                           ),
                         ],
                         const SizedBox(height: 16),
-                        _DropdownField<int>(
-                          label: 'Academic Year',
-                          value: _selectedYearId,
-                          items: _years
-                              .map(
-                                (entry) => DropdownMenuItem<int>(
-                                  value: entry.id,
-                                  child: Text(entry.name),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (value) async {
-                            setState(() {
-                              _selectedYearId = value;
-                              _terms = const [];
-                              _exams = const [];
-                              _selectedTermId = null;
-                              _selectedExamId = null;
-                              _clearRoster();
-                            });
-                            await _loadTermsAndExams();
-                          },
-                        ),
-                        const SizedBox(height: 12),
-                        _DropdownField<int?>(
-                          label: 'Term',
-                          value: _selectedTermId,
-                          items: _terms
-                              .map(
-                                (entry) => DropdownMenuItem<int?>(
-                                  value: entry.id,
-                                  child: Text(entry.name),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (value) async {
-                            setState(() {
-                              _selectedTermId = value;
-                              _selectedExamId = null;
-                              _clearRoster();
-                            });
-                            await _refreshExams();
-                          },
-                        ),
-                        const SizedBox(height: 12),
-                        _DropdownField<int>(
-                          label: 'Exam',
-                          value: _selectedExamId,
-                          items: _exams
-                              .map(
-                                (entry) => DropdownMenuItem<int>(
-                                  value: entry.id,
-                                  child: Text(
-                                    '${entry.name} · Max ${_formatMark(entry.maxMark)}',
+                        _SelectionGrid(children: [
+                          _DropdownField<int>(
+                            label: 'Academic Year',
+                            value: _selectedYearId,
+                            items: _years
+                                .map(
+                                  (entry) => DropdownMenuItem<int>(
+                                    value: entry.id,
+                                    child: Text(entry.name),
                                   ),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (value) async {
-                            setState(() {
-                              _selectedExamId = value;
-                              _clearRoster();
-                            });
-                            await _writeSnapshot();
-                          },
-                        ),
-                        const SizedBox(height: 12),
-                        _DropdownField<int>(
-                          label: 'Level',
-                          value: _selectedLevelId,
-                          items: _levels
-                              .map(
-                                (entry) => DropdownMenuItem<int>(
-                                  value: entry.id,
-                                  child: Text(entry.name),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (value) async {
-                            final classes = _classes
-                                .where((entry) => entry.levelId == value)
-                                .toList();
-                            setState(() {
-                              _selectedLevelId = value;
-                              _selectedClassId =
-                                  classes.isNotEmpty ? classes.first.id : null;
-                              _clearRoster();
-                            });
-                            await _writeSnapshot();
-                          },
-                        ),
-                        const SizedBox(height: 12),
-                        _DropdownField<int>(
-                          label: 'Class',
-                          value: _selectedClassId,
-                          items: _filteredClasses
-                              .map(
-                                (entry) => DropdownMenuItem<int>(
-                                  value: entry.id,
-                                  child: Text(entry.name),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (value) async {
-                            setState(() {
-                              _selectedClassId = value;
-                              _clearRoster();
-                            });
-                            await _writeSnapshot();
-                          },
-                        ),
-                        const SizedBox(height: 12),
-                        _DropdownField<int>(
-                          label: 'Subject',
-                          value: _selectedSubjectId,
-                          items: _subjects
-                              .map(
-                                (entry) => DropdownMenuItem<int>(
-                                  value: entry.id,
-                                  child: Text(entry.name),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (value) async {
-                            setState(() {
-                              _selectedSubjectId = value;
-                              _clearRoster();
-                            });
-                            await _writeSnapshot();
-                          },
-                        ),
+                                )
+                                .toList(),
+                            onChanged: (value) async {
+                              setState(() {
+                                _selectedYearId = value;
+                                _terms = const [];
+                                _exams = const [];
+                                _selectedTermId = null;
+                                _selectedExamId = null;
+                                _clearRoster();
+                              });
+                              await _loadTermsAndExams();
+                            },
+                          ),
+                          _DropdownField<int?>(
+                            label: 'Term',
+                            value: _selectedTermId,
+                            items: _terms
+                                .map(
+                                  (entry) => DropdownMenuItem<int?>(
+                                    value: entry.id,
+                                    child: Text(entry.name),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: (value) async {
+                              setState(() {
+                                _selectedTermId = value;
+                                _selectedExamId = null;
+                                _clearRoster();
+                              });
+                              await _refreshExams();
+                            },
+                          ),
+                          _DropdownField<int>(
+                            label: 'Exam',
+                            value: _selectedExamId,
+                            items: _exams
+                                .map(
+                                  (entry) => DropdownMenuItem<int>(
+                                    value: entry.id,
+                                    child: Text(
+                                      '${entry.name} · Max ${_formatMark(entry.maxMark)}',
+                                    ),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: (value) async {
+                              setState(() {
+                                _selectedExamId = value;
+                                _clearRoster();
+                              });
+                              await _writeSnapshot();
+                            },
+                          ),
+                          _DropdownField<int>(
+                            label: 'Level',
+                            value: _selectedLevelId,
+                            items: _levels
+                                .map(
+                                  (entry) => DropdownMenuItem<int>(
+                                    value: entry.id,
+                                    child: Text(entry.name),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: (value) async {
+                              final classes = _classes
+                                  .where((entry) => entry.levelId == value)
+                                  .toList();
+                              setState(() {
+                                _selectedLevelId = value;
+                                _selectedClassId = classes.isNotEmpty
+                                    ? classes.first.id
+                                    : null;
+                                _clearRoster();
+                              });
+                              await _writeSnapshot();
+                            },
+                          ),
+                          _DropdownField<int>(
+                            label: 'Class',
+                            value: _selectedClassId,
+                            items: _filteredClasses
+                                .map(
+                                  (entry) => DropdownMenuItem<int>(
+                                    value: entry.id,
+                                    child: Text(entry.name),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: (value) async {
+                              setState(() {
+                                _selectedClassId = value;
+                                _clearRoster();
+                              });
+                              await _writeSnapshot();
+                            },
+                          ),
+                          _DropdownField<int>(
+                            label: 'Subject',
+                            value: _selectedSubjectId,
+                            items: _subjects
+                                .map(
+                                  (entry) => DropdownMenuItem<int>(
+                                    value: entry.id,
+                                    child: Text(entry.name),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: (value) async {
+                              setState(() {
+                                _selectedSubjectId = value;
+                                _clearRoster();
+                              });
+                              await _writeSnapshot();
+                            },
+                          ),
+                        ]),
                         const SizedBox(height: 16),
                         Wrap(
                           spacing: 12,
@@ -883,9 +882,9 @@ class _ExamMarkEntryScreenState extends State<ExamMarkEntryScreen> {
             const SizedBox(height: 20),
             if (_students.isNotEmpty)
               Container(
-                padding: const EdgeInsets.all(18),
+                padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: theme.colorScheme.surface,
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Column(
@@ -898,27 +897,18 @@ class _ExamMarkEntryScreenState extends State<ExamMarkEntryScreen> {
                       style: theme.textTheme.bodyMedium,
                     ),
                     const SizedBox(height: 16),
-                    ..._students.map(_buildStudentCard),
-                    const SizedBox(height: 12),
-                    FilledButton.icon(
-                      onPressed: _saving ? null : _saveMarks,
-                      icon: const Icon(Icons.save_outlined),
-                      label: Text(
-                        _saving
-                            ? 'Saving...'
-                            : (_hasPendingDraft
-                                ? 'Sync Exam Marks'
-                                : 'Save Exam Marks'),
-                      ),
-                    ),
+                    ..._students
+                        .asMap()
+                        .entries
+                        .map((e) => _buildStudentRow(e.value, e.key)),
                   ],
                 ),
               )
             else if (!_loadingSetup && !_loadingRoster)
               Container(
-                padding: const EdgeInsets.all(18),
+                padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: theme.colorScheme.surface,
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
@@ -932,76 +922,141 @@ class _ExamMarkEntryScreenState extends State<ExamMarkEntryScreen> {
     );
   }
 
-  Widget _buildStudentCard(StudentListItem student) {
-    final draft = _drafts[student.id];
-    if (draft == null) {
-      return const SizedBox.shrink();
-    }
+  void _draftChanged(String _) {
+    setState(() {
+      _hasPendingDraft = true;
+      _statusMessage =
+          'Offline draft saved on this device. Sync marks again when the server is reachable.';
+    });
+    _writeSnapshot(pendingDraft: true, statusMessage: _statusMessage);
+  }
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: const Color(0xFFF8FAFC),
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(student.name, style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 4),
-            Text(
-              student.currentYear?.rollNumber?.isNotEmpty == true
-                  ? 'Roll No: ${student.currentYear!.rollNumber}'
-                  : 'No roll number assigned',
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: draft.markController,
-              decoration: const InputDecoration(
-                labelText: 'Mark',
-                hintText: 'Enter score',
+  String? _markError(String raw) {
+    if (raw.trim().isEmpty) return null;
+    final mark = double.tryParse(raw.trim());
+    if (mark == null || !mark.isFinite) return 'Enter a number';
+    final maximum = _selectedExam?.maxMark;
+    if (mark < 0 || (maximum != null && mark > maximum)) {
+      return '0 to ${maximum == null ? '--' : _formatMark(maximum)}';
+    }
+    return null;
+  }
+
+  Widget _buildSaveBar() {
+    final entered = _drafts.values
+        .where((d) => d.markController.text.trim().isNotEmpty)
+        .length;
+    return Material(
+      elevation: 8,
+      color: Theme.of(context).colorScheme.surface,
+      child: SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                      '$entered entered · ${_students.length - entered} remaining',
+                      textAlign: TextAlign.center),
+                  const SizedBox(height: 8),
+                  FilledButton.icon(
+                    onPressed: _saving || _loadingRoster ? null : _saveMarks,
+                    icon: const Icon(Icons.save_outlined),
+                    label: Text(_saving ? 'Saving...' : 'Save Exam Marks'),
+                  ),
+                ]),
+          )),
+    );
+  }
+
+  Widget _buildStudentRow(StudentListItem student, int index) {
+    final draft = _drafts[student.id];
+    if (draft == null) return const SizedBox.shrink();
+    final theme = Theme.of(context);
+    final last = index == _students.length - 1;
+    Widget commentField() => TextField(
+          key: ValueKey('comment-${student.id}'),
+          controller: draft.commentController,
+          enabled: !_saving,
+          decoration: const InputDecoration(
+              labelText: 'Comment', hintText: 'Optional', isDense: true),
+          maxLines: 3,
+          minLines: 1,
+          onChanged: _draftChanged,
+        );
+    return Container(
+      key: ValueKey('student-${student.id}'),
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      decoration: BoxDecoration(
+          border: Border(
+              bottom: BorderSide(color: theme.colorScheme.outlineVariant))),
+      child: LayoutBuilder(builder: (context, constraints) {
+        final wide = constraints.maxWidth >= 600;
+        return Column(children: [
+          Row(children: [
+            Expanded(
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                  Text(student.name, style: theme.textTheme.titleSmall),
+                  Text(
+                      student.currentYear?.rollNumber?.isNotEmpty == true
+                          ? 'Roll No: ${student.currentYear!.rollNumber}'
+                          : 'No roll number assigned',
+                      style: theme.textTheme.bodySmall),
+                ])),
+            const SizedBox(width: 8),
+            SizedBox(
+                width: 100,
+                child: TextField(
+                  key: ValueKey('mark-${student.id}'),
+                  controller: draft.markController,
+                  focusNode: draft.markFocus,
+                  enabled: !_saving,
+                  decoration: InputDecoration(
+                      labelText: 'Mark',
+                      isDense: true,
+                      suffixText:
+                          '/${_selectedExam == null ? '--' : _formatMark(_selectedExam!.maxMark)}',
+                      errorText: _markError(draft.markController.text)),
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  textInputAction:
+                      last ? TextInputAction.done : TextInputAction.next,
+                  onSubmitted: (_) {
+                    if (last) {
+                      draft.markFocus.unfocus();
+                    } else {
+                      _drafts[_students[index + 1].id]
+                          ?.markFocus
+                          .requestFocus();
+                    }
+                  },
+                  onChanged: _draftChanged,
+                )),
+            const SizedBox(width: 8),
+            if (wide)
+              Expanded(child: commentField())
+            else
+              IconButton(
+                tooltip: draft.commentExpanded
+                    ? 'Hide comment'
+                    : 'Add or edit comment',
+                isSelected: draft.commentController.text.isNotEmpty,
+                icon: const Icon(Icons.chat_bubble_outline),
+                selectedIcon: const Icon(Icons.chat_bubble),
+                onPressed: () => setState(
+                    () => draft.commentExpanded = !draft.commentExpanded),
               ),
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-              onChanged: (_) {
-                setState(() {
-                  _hasPendingDraft = true;
-                  _statusMessage =
-                      'Offline draft saved on this device. Sync marks again when the server is reachable.';
-                });
-                _writeSnapshot(
-                  pendingDraft: true,
-                  statusMessage:
-                      'Offline draft saved on this device. Sync marks again when the server is reachable.',
-                );
-              },
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: draft.commentController,
-              decoration: const InputDecoration(
-                labelText: 'Comment',
-                hintText: 'Optional comment',
-              ),
-              maxLines: 2,
-              onChanged: (_) {
-                setState(() {
-                  _hasPendingDraft = true;
-                  _statusMessage =
-                      'Offline draft saved on this device. Sync marks again when the server is reachable.';
-                });
-                _writeSnapshot(
-                  pendingDraft: true,
-                  statusMessage:
-                      'Offline draft saved on this device. Sync marks again when the server is reachable.',
-                );
-              },
-            ),
+          ]),
+          if (!wide && draft.commentExpanded) ...[
+            const SizedBox(height: 8),
+            commentField()
           ],
-        ),
-      ),
+        ]);
+      }),
     );
   }
 }
@@ -1023,7 +1078,8 @@ class _DropdownField<T> extends StatelessWidget {
   Widget build(BuildContext context) {
     return DropdownButtonFormField<T>(
       value: items.any((entry) => entry.value == value) ? value : null,
-      decoration: InputDecoration(labelText: label),
+      isExpanded: true,
+      decoration: InputDecoration(labelText: label, isDense: true),
       items: items,
       onChanged: items.isEmpty ? null : onChanged,
     );
@@ -1037,10 +1093,13 @@ class _MarkDraftControllers {
   })  : markController = TextEditingController(text: mark),
         commentController = TextEditingController(text: comment);
 
+  final FocusNode markFocus = FocusNode();
+  bool commentExpanded = false;
   final TextEditingController markController;
   final TextEditingController commentController;
 
   void dispose() {
+    markFocus.dispose();
     markController.dispose();
     commentController.dispose();
   }
@@ -1055,3 +1114,19 @@ String _formatMark(double value) {
 }
 
 const _examMarkEntryCacheKey = 'exam_mark_entry_snapshot';
+
+class _SelectionGrid extends StatelessWidget {
+  const _SelectionGrid({required this.children});
+  final List<Widget> children;
+  @override
+  Widget build(BuildContext context) =>
+      LayoutBuilder(builder: (context, constraints) {
+        final single = constraints.maxWidth < 260 ||
+            MediaQuery.textScalerOf(context).scale(14) > 21;
+        final width =
+            single ? constraints.maxWidth : (constraints.maxWidth - 12) / 2;
+        return Wrap(spacing: 12, runSpacing: 16, children: [
+          for (final child in children) SizedBox(width: width, child: child),
+        ]);
+      });
+}

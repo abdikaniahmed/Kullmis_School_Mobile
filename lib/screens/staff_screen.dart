@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../models/auth_session.dart';
@@ -43,6 +45,8 @@ class _StaffScreenState extends State<StaffScreen> {
   String? _statusMessage;
   String? _error;
   String _typeFilter = '';
+  Timer? _searchDebounce;
+  int _requestId = 0;
 
   bool get _canCreate => widget.session.hasPermission('staff.create');
   bool get _canEdit => widget.session.hasPermission('staff.edit');
@@ -57,11 +61,15 @@ class _StaffScreenState extends State<StaffScreen> {
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
+    _requestId++;
     _searchController.dispose();
     super.dispose();
   }
 
   Future<void> _loadPage({int page = 1}) async {
+    _searchDebounce?.cancel();
+    final requestId = ++_requestId;
     setState(() {
       _loading = true;
       _error = null;
@@ -76,7 +84,7 @@ class _StaffScreenState extends State<StaffScreen> {
         type: _typeFilter,
       );
 
-      if (!mounted) {
+      if (!mounted || requestId != _requestId) {
         return;
       }
 
@@ -88,14 +96,16 @@ class _StaffScreenState extends State<StaffScreen> {
 
       await _writeSnapshot();
     } on ApiException catch (error) {
+      if (!mounted || requestId != _requestId) return;
       final restored = await _restoreSnapshot(
         'Offline mode: showing last synced staff list.',
+        requestId,
       );
       if (restored) {
         return;
       }
 
-      if (!mounted) {
+      if (!mounted || requestId != _requestId) {
         return;
       }
 
@@ -105,14 +115,16 @@ class _StaffScreenState extends State<StaffScreen> {
         _error = error.message;
       });
     } catch (_) {
+      if (!mounted || requestId != _requestId) return;
       final restored = await _restoreSnapshot(
         'Offline mode: showing last synced staff list.',
+        requestId,
       );
       if (restored) {
         return;
       }
 
-      if (!mounted) {
+      if (!mounted || requestId != _requestId) {
         return;
       }
 
@@ -124,16 +136,17 @@ class _StaffScreenState extends State<StaffScreen> {
     }
   }
 
-  Future<bool> _restoreSnapshot(String fallbackMessage) async {
+  Future<bool> _restoreSnapshot(String fallbackMessage, int requestId) async {
     final json = await _cacheStore.readCacheDocument(_staffCacheKey);
     if (json == null) {
       return false;
     }
 
+    if (!mounted || requestId != _requestId) return true;
     final snapshot = StaffOfflineSnapshot.fromJson(json);
     _searchController.text = snapshot.search;
 
-    if (!mounted) {
+    if (!mounted || requestId != _requestId) {
       return true;
     }
 
@@ -275,57 +288,118 @@ class _StaffScreenState extends State<StaffScreen> {
       ..showSnackBar(SnackBar(content: Text(message)));
   }
 
+  Future<void> _chooseType() async {
+    FocusScope.of(context).unfocus();
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      useSafeArea: true,
+      isScrollControlled: true,
+      constraints: const BoxConstraints(maxWidth: 640),
+      builder: (sheetContext) => ConstrainedBox(
+        constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.55),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Text('Staff type',
+                  style: Theme.of(sheetContext).textTheme.titleMedium)),
+          Flexible(
+              child: ListView.builder(
+            shrinkWrap: true,
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+            itemCount: _types.length,
+            itemBuilder: (context, index) {
+              final type = _types[index];
+              final selected = type == _typeFilter;
+              return ListTile(
+                dense: true,
+                selected: selected,
+                selectedTileColor:
+                    Theme.of(context).colorScheme.secondaryContainer,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+                title: Text(type.isEmpty ? 'All Types' : type),
+                trailing: selected ? const Icon(Icons.check) : null,
+                onTap: () => Navigator.pop(sheetContext, type),
+              );
+            },
+          )),
+        ]),
+      ),
+    );
+    if (!mounted || selected == null || selected == _typeFilter) return;
+    setState(() => _typeFilter = selected);
+    _loadPage();
+  }
+
   Widget _buildFilters() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: _searchController,
-                textInputAction: TextInputAction.search,
-                decoration: const InputDecoration(
-                  labelText: 'Search staff',
-                  border: OutlineInputBorder(),
-                ),
-                onSubmitted: (_) => _loadPage(),
-              ),
+        SizedBox(
+          height: 50,
+          child: TextField(
+            controller: _searchController,
+            textInputAction: TextInputAction.search,
+            decoration: InputDecoration(
+              hintText: 'Search staff',
+              isDense: true,
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              prefixIcon: const Icon(Icons.search),
+              suffixIcon: _searchController.text.isEmpty
+                  ? null
+                  : IconButton(
+                      tooltip: 'Clear search',
+                      icon: const Icon(Icons.close),
+                      onPressed: () {
+                        _searchController.clear();
+                        setState(() {});
+                        _loadPage();
+                      },
+                    ),
+              border:
+                  OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
             ),
-            const SizedBox(width: 12),
-            SizedBox(
-              width: 150,
-              child: DropdownButtonFormField<String>(
-                value: _typeFilter,
-                items: _types
-                    .map(
-                      (value) => DropdownMenuItem(
-                        value: value,
-                        child: Text(value.isEmpty ? 'All Types' : value),
-                      ),
-                    )
-                    .toList(),
-                decoration: const InputDecoration(
-                  labelText: 'Type',
-                  border: OutlineInputBorder(),
-                ),
-                onChanged: (value) {
-                  setState(() {
-                    _typeFilter = value ?? '';
-                  });
-                  _loadPage();
-                },
-              ),
-            ),
-            const SizedBox(width: 12),
-            FilledButton(
-              onPressed: _loading ? null : _loadPage,
-              child: const Text('Search'),
-            ),
-          ],
+            onChanged: (_) {
+              _searchDebounce?.cancel();
+              // Invalidate in-flight results as soon as the query changes.
+              _requestId++;
+              setState(() {});
+              _searchDebounce =
+                  Timer(const Duration(milliseconds: 350), () => _loadPage());
+            },
+            onSubmitted: (_) => _loadPage(),
+          ),
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          key: const ValueKey('staff-type-filter'),
+          height: 50,
+          width: double.infinity,
+          child: OutlinedButton(
+            style: OutlinedButton.styleFrom(
+                foregroundColor: Theme.of(context).colorScheme.onSurface,
+                side: BorderSide(color: Theme.of(context).colorScheme.outline),
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16))),
+            onPressed: _chooseType,
+            child: Row(children: [
+              const Icon(Icons.filter_list, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                  child: Text(
+                      'Type: ${_typeFilter.isEmpty ? 'All Types' : _typeFilter}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis)),
+              const Icon(Icons.expand_more),
+            ]),
+          ),
         ),
         if (_statusMessage != null) ...[
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           _StaffOfflineBanner(
             message: _statusMessage!,
             onRetry: _usingOfflineData ? _loadPage : null,
@@ -335,62 +409,73 @@ class _StaffScreenState extends State<StaffScreen> {
     );
   }
 
-  Widget _buildRow(StaffMember staff) {
-    final hasUser = staff.user != null;
+  Widget _staffDetail(IconData icon, String label, String value) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Icon(icon, size: 18, color: theme.colorScheme.onSurfaceVariant),
+        const SizedBox(width: 8),
+        Expanded(
+            child: Text.rich(
+                TextSpan(children: [
+                  TextSpan(
+                      text: '$label: ',
+                      style:
+                          TextStyle(color: theme.colorScheme.onSurfaceVariant)),
+                  TextSpan(text: value),
+                ]),
+                style: theme.textTheme.bodyMedium)),
+      ]),
+    );
+  }
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.black.withOpacity(0.08)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  staff.name,
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
+  Widget _buildRow(StaffMember staff) {
+    final theme = Theme.of(context);
+    return Card.outlined(
+      margin: const EdgeInsets.only(bottom: 8),
+      color: theme.colorScheme.surface,
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: theme.colorScheme.outlineVariant)),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Expanded(
+                child: Text(staff.name, style: theme.textTheme.titleMedium)),
+            if (_canViewTeachers && staff.type == 'teacher')
+              Icon(Icons.school_outlined,
+                  size: 18, color: theme.colorScheme.primary),
+            if (_canEdit || _canDelete)
+              PopupMenuButton<String>(
+                tooltip: 'Staff actions for ${staff.name}',
+                icon: const Icon(Icons.more_vert),
+                enabled: !_usingOfflineData,
+                onSelected: (action) {
+                  if (action == 'edit') _openEdit(staff);
+                  if (action == 'delete') _confirmDelete(staff);
+                },
+                itemBuilder: (_) => [
+                  if (_canEdit)
+                    const PopupMenuItem(value: 'edit', child: Text('Edit')),
+                  if (_canDelete)
+                    const PopupMenuItem(value: 'delete', child: Text('Delete')),
+                ],
               ),
-              if (_canViewTeachers && staff.type == 'teacher')
-                const Icon(Icons.school_outlined, size: 18),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Wrap(
-            spacing: 8,
-            runSpacing: 6,
-            children: [
-              _InfoChip(label: staff.position ?? 'No position'),
-              _InfoChip(label: staff.type.isEmpty ? 'staff' : staff.type),
-              _InfoChip(label: staff.phone ?? 'No phone'),
-              _InfoChip(label: staff.email ?? 'No email'),
-              _InfoChip(label: hasUser ? 'Has user' : 'No user'),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            children: [
-              if (_canEdit)
-                OutlinedButton(
-                  onPressed: _usingOfflineData ? null : () => _openEdit(staff),
-                  child: const Text('Edit'),
-                ),
-              if (_canDelete)
-                OutlinedButton(
-                  onPressed:
-                      _usingOfflineData ? null : () => _confirmDelete(staff),
-                  child: const Text('Delete'),
-                ),
-            ],
-          ),
-        ],
+          ]),
+          const SizedBox(height: 4),
+          _staffDetail(Icons.badge_outlined, 'Type',
+              staff.type.isEmpty ? 'staff' : staff.type),
+          if (staff.position?.isNotEmpty == true)
+            _staffDetail(Icons.work_outline, 'Position', staff.position!),
+          _staffDetail(
+              Icons.phone_outlined, 'Phone', staff.phone ?? 'No phone'),
+          _staffDetail(
+              Icons.email_outlined, 'Email', staff.email ?? 'No email'),
+          _staffDetail(Icons.account_circle_outlined, 'User account',
+              staff.user != null ? 'Linked' : 'Not linked'),
+        ]),
       ),
     );
   }
@@ -415,7 +500,7 @@ class _StaffScreenState extends State<StaffScreen> {
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
         children: [
           _buildFilters(),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
           if (_loading)
             const Center(child: CircularProgressIndicator())
           else if (items.isEmpty)
@@ -426,7 +511,7 @@ class _StaffScreenState extends State<StaffScreen> {
           else
             ...items.map(_buildRow),
           if (_error != null) ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
             Text(
               _error!,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
@@ -435,14 +520,17 @@ class _StaffScreenState extends State<StaffScreen> {
             ),
           ],
           if (_page != null) ...[
-            const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            const SizedBox(height: 12),
+            Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              spacing: 12,
+              runSpacing: 8,
               children: [
                 Text(
                   'Showing ${_page!.from ?? 0}-${_page!.to ?? 0} of ${_page!.total}',
                 ),
                 Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     TextButton(
                       onPressed: _page!.hasPreviousPage
@@ -500,24 +588,6 @@ class _StaffOfflineBanner extends StatelessWidget {
             ),
         ],
       ),
-    );
-  }
-}
-
-class _InfoChip extends StatelessWidget {
-  const _InfoChip({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.primary.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(label, style: Theme.of(context).textTheme.bodySmall),
     );
   }
 }
